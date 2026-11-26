@@ -10,6 +10,16 @@ const menus = new Set(['home', 'garage', 'shop', 'daily']);
 const dialogs = new Set(['briefing', 'pause', 'success', 'failure', 'bonus-briefing']);
 const escapeAction = { driving: 'pause', pause: 'resume', briefing: 'home', 'bonus-briefing': 'cancel-bonus', failure: 'home' };
 const statusInput = new WeakMap();
+const steeringDeadZone = 7;
+
+function updateSteering(hold, x) {
+  const { center, travel } = hold;
+  const offset = clamp(x - center, -travel, travel);
+  if (offset === hold.offset) return false;
+  hold.offset = offset;
+  hold.direction = Math.abs(offset) <= steeringDeadZone ? null : offset < 0 ? 'left' : 'right';
+  return true;
+}
 
 export function statusScene(app, title, detail, fixtureLink) {
   const { width, height } = app.screen;
@@ -65,6 +75,7 @@ export function gameUI(app, content, textures, game, effects) {
   const { state } = game;
   const scroll = { offset: 0, min: null, max: null };
   const swipe = new Set();
+  const drivingPointers = new Map();
   let drag;
   let previous;
   let lastMission;
@@ -128,11 +139,20 @@ export function gameUI(app, content, textures, game, effects) {
       node.eventMode = 'none';
       return;
     }
-    if (control.drive) {
+    if (control.drive || control.steeringTravel) {
+      const kind = control.drive ?? 'steer';
       node.on('pointerdown', e => {
-        if (e.button !== 0 || state.phase !== 'driving') return;
+        if (e.button !== 0 || state.phase !== 'driving' || drivingPointers.has(kind)) return;
         focusCanvas();
-        effects.hold(e.pointerId, control.drive);
+        const hold = { id: e.pointerId, direction: control.drive };
+        if (control.steeringTravel) {
+          hold.center = node.toGlobal({ x: node.hitArea.width / 2, y: 0 }).x;
+          hold.travel = control.steeringTravel;
+          updateSteering(hold, e.global.x);
+        }
+        effects.capture(e.pointerId);
+        drivingPointers.set(kind, hold);
+        draw(effects.input());
       });
     } else if (control.action || control.enter) {
       node.on('pointertap', e => {
@@ -168,8 +188,16 @@ export function gameUI(app, content, textures, game, effects) {
         }
         const drive = run.drive ?? staticDrive;
         const base = group(stage, 'drive-scene');
-        drawDrive = showDrive(base, drive, size, phase === 'driving' ? controls : []);
-        if (phase !== 'driving') base.eventMode = 'none';
+        const active = phase === 'driving';
+        const touch = size.width < 680 || effects.hasTouchInput();
+        let safeArea;
+        if (touch) {
+          const style = getComputedStyle(canvas);
+          const inset = edge => parseFloat(style.getPropertyValue(`--drive-safe-${edge}`)) || 0;
+          safeArea = { left: inset('left'), right: inset('right'), bottom: inset('bottom') };
+        }
+        drawDrive = showDrive(base, drive, size, active ? controls : null, { touch, safeArea });
+        if (!active) base.eventMode = 'none';
       }
       if (dialogs.has(phase)) {
         const root = group(stage, `dialog:${phase}`);
@@ -213,13 +241,13 @@ export function gameUI(app, content, textures, game, effects) {
   }
 
   function draw(input) {
-    drawDrive?.(input);
+    drawDrive?.(input, drivingPointers.get('steer')?.offset ?? 0);
     effects.invalidate();
   }
 
   function visibleControls() {
     return controls.filter(item => {
-      if (!item.enabled) return false;
+      if (!item.enabled || item.steeringTravel) return false;
       if (vehicleOpen) return item.role === 'option';
       return true;
     });
@@ -306,8 +334,19 @@ export function gameUI(app, content, textures, game, effects) {
 
   function release(id) {
     if (drag?.id === id) drag = undefined;
+    for (const [kind, hold] of drivingPointers) {
+      if (hold.id === id) return drivingPointers.delete(kind);
+    }
+    return false;
   }
 
+  canvas.addEventListener('pointermove', event => {
+    const hold = drivingPointers.get('steer');
+    if (!hold || hold.id !== event.pointerId) return;
+    const bounds = canvas.getBoundingClientRect();
+    const x = (event.clientX - bounds.left) * app.screen.width / bounds.width;
+    if (updateSteering(hold, x)) draw(effects.input());
+  });
   canvas.addEventListener('wheel', event => {
     if (!map || event.ctrlKey) return;
     event.preventDefault();
@@ -319,7 +358,12 @@ export function gameUI(app, content, textures, game, effects) {
 
   return {
     show, draw, key, release,
-    cancel() { drag = undefined; swipe.clear(); },
+    *heldDirections() {
+      for (const { direction } of drivingPointers.values()) {
+        if (direction) yield direction;
+      }
+    },
+    cancel() { drag = undefined; swipe.clear(); drivingPointers.clear(); },
     notice(value) { notice = value; },
     observation: () => ({ controls, focus, scroll, modal: dialogs.has(state.phase) ? state.phase : null }),
   };

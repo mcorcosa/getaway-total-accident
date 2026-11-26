@@ -17,7 +17,9 @@ Open [Chapter 1](http://127.0.0.1:8080/) in a browser. Use the HTTP address so t
 
 ## GitHub Pages
 
-Keep using `node scripts/serve.mjs` for local development. To package the static site from the project root, run:
+Push to `main` to publish. GitHub Actions builds and deploys the game automatically. Check the latest deploy in [GitHub Actions](https://github.com/mcorcosa/getaway-total-accident/actions/workflows/pages.yml), then open [Getaway Total Accident](https://mcorcosa.github.io/getaway-total-accident/). The hosted game and localhost keep separate browser saves.
+
+**Optional local check.** From the project root, run the following to package the site and smoke-test it under the repository subpath. The test starts its own local server and clears and banks Mission 1.
 
 ```sh
 npm ci
@@ -25,17 +27,11 @@ npm run build:pages
 node --test --test-reporter=spec tests/browser/pages-smoke.test.mjs
 ```
 
-The build writes `dist-pages/`, including Pixi and the authored Chapter 1 files. The static package disables the local fixture and observer modes. The smoke test starts its own local HTTP server at `/getaway-total-accident/`, checks that Pixi, mission data, and artwork load, then clears and banks Mission 1.
-
-The [GitHub Pages workflow](../.github/workflows/pages.yml) builds and runs the content and Node checks on pushes to `main` and when run manually from Actions. The workflow uploads and deploys the Pages artifact only from `main`. In the repository’s Pages settings, select **GitHub Actions** as the publishing source. [GitHub Pages source setup](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow)
-
-Check the latest successful GitHub Pages deploy job in Actions to confirm publication. The project URL is [Getaway Total Accident on GitHub Pages](https://mcorcosa.github.io/getaway-total-accident/). Progress is browser-local and origin-specific. The hosted site starts with its own save, separate from the localhost save.
-
 ## Controls
 
 - Acceleration is automatic. The first mission can clear with hands off the controls.
 - Steer with **Left / Right** or **A / D**. Brake with **Down**, **S**, or **Space**.
-- On touch, press and hold the on-screen **Left**, **Brake**, or **Right** controls.
+- On touch, drag the **bottom-right stick** left or right to steer. Release it to return to center. Hold the **left pedal** to brake. You can steer and brake together.
 - Pause with **Esc** or the on-screen **Pause** button.
 
 ## Run checks

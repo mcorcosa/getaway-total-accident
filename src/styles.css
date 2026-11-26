@@ -9,6 +9,9 @@ body {
 }
 
 #stage {
+  --drive-safe-left: env(safe-area-inset-left, 0px);
+  --drive-safe-right: env(safe-area-inset-right, 0px);
+  --drive-safe-bottom: env(safe-area-inset-bottom, 0px);
   display: block;
   width: 100vw;
   height: 100dvh;

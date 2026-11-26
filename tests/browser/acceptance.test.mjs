@@ -314,8 +314,34 @@ function contact(page, kind, touchPoints = []) {
   return page.send('Input.dispatchTouchEvent', { type: kind, touchPoints });
 }
 
+async function moveContacts(page, ...touchPoints) {
+  await contact(page, 'touchMove', touchPoints);
+  // Chromium may deliver coalesced touch moves on the next frame.
+  await settle(page);
+}
+
 async function holdPoint(page, id, contactId) {
   return { ...await page.center(`drive:${id}`), id: contactId };
+}
+
+function verifyTouchControls(view) {
+  const brake = control(view, 'drive:brake');
+  const stick = control(view, 'drive:steer');
+  const { hudBottom } = playfield(view);
+  assert.ok(brake.interactive && stick.interactive);
+  assert.ok(brake.bounds.x > 0 && brake.bounds.x + brake.bounds.width < view.width / 2);
+  assert.ok(stick.bounds.x > view.width / 2 && stick.bounds.x + stick.bounds.width < view.width);
+  for (const { bounds } of [brake, stick]) {
+    assert.ok(bounds.height >= 44 && bounds.y > hudBottom && bounds.y + bounds.height < view.height);
+  }
+  assert.equal(brake.bounds.y, stick.bounds.y);
+  assert.equal(control(view, 'drive:left'), undefined);
+  assert.equal(control(view, 'drive:right'), undefined);
+}
+
+function steeringOffset(view) {
+  const { x, width } = control(view, 'drive:steer').bounds;
+  return object(view, 'steer-thumb').position.x - (x + width / 2);
 }
 
 async function holdBrake(page, mobile) {
@@ -385,7 +411,9 @@ async function captureFirstBend(page, name, mobile) {
   const { player, objective } = corner.drive;
   const turnTo = Math.atan2(objective.destination.y - player.y, objective.destination.x - player.x);
   if (mobile) {
-    await contact(page, 'touchStart', [await holdPoint(page, 'brake', 1), await holdPoint(page, 'right', 2)]);
+    const stick = await holdPoint(page, 'steer', 2);
+    await contact(page, 'touchStart', [stick]);
+    await contact(page, 'touchMove', [{ ...stick, x: stick.x + 42 }]);
   } else {
     await page.key('ArrowRight', 'rawKeyDown');
   }
@@ -412,8 +440,12 @@ async function captureFirstBend(page, name, mobile) {
   await shot(page, `${name}-c1-04-corner`);
 }
 
+function headingDelta(a, b) {
+  return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+}
+
 function angleDifference(a, b) {
-  return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+  return Math.abs(headingDelta(a, b));
 }
 
 test('Authored Home, briefing, paused driving, hands-off clear, bonus return and single bank', { timeout: 40000 }, async () => {
@@ -527,33 +559,218 @@ test('Authored M1 bonus success carries condition and automatically banks both p
   });
 });
 
-test('390×600 touch can brake, steer simultaneously, cancel and coast without stuck input', { timeout: 26000 }, async () => {
+test('390×600 touch steering crosses neutral and releases independently of the brake', { timeout: 26000 }, async () => {
   await inBrowser('mobile-controls', { width: 390, height: 600, mobile: true }, async page => {
     assert.equal(await page.read(() => navigator.maxTouchPoints), 2);
     await openMission(page, 'C1-01');
     await shot(page, 'mobile-390-briefing');
-    await start(page);
+    const idle = await start(page);
+    verifyTouchControls(idle);
+    assert.ok(Math.abs(steeringOffset(idle)) < 1);
+    assert.equal(object(idle, 'held:brake').visible, false);
+    await shot(page, 'mobile-390-controls-neutral');
     const brake = await holdPoint(page, 'brake', 1);
-    const right = await holdPoint(page, 'right', 2);
+    const stick = await holdPoint(page, 'steer', 2);
+    const right = { ...stick, x: stick.x + 64, y: stick.y - 100 };
+    const left = { ...stick, x: stick.x - 47 };
     await contact(page, 'touchStart', [brake]);
     await poll(async () => (await snapshot(page)).input.brake, 'touch brake');
+    assert.equal(object(await snapshot(page), 'held:brake').visible, true);
     await delay(250);
     const stopped = (await snapshot(page)).drive.player;
     await delay(250);
     assert.deepEqual((await snapshot(page)).drive.player, stopped);
-    await contact(page, 'touchStart', [brake, right]);
+    await contact(page, 'touchStart', [stick]);
+    await moveContacts(page, { ...stick, x: stick.x + 4 });
+    let view = await snapshot(page);
+    assert.deepEqual(view.input, { ...neutral, brake: true });
+    assert.ok(steeringOffset(view) > 2 && steeringOffset(view) < 6, 'The thumb moves inside the dead zone');
+    await contact(page, 'touchMove', [right]);
     await poll(async () => {
       const view = await snapshot(page);
-      return view.input.brake && view.input.right && angleDifference(view.drive.player.heading, stopped.heading) > .25;
-    }, 'the braked vehicle to turn with a second held touch');
-    await shot(page, 'mobile-390-touch-steer-brake');
+      return view.input.brake && view.input.right && headingDelta(view.drive.player.heading, stopped.heading) > .25;
+    }, 'the braked car to turn right with the steering finger above the control');
+    view = await snapshot(page);
+    assert.ok(steeringOffset(view) > 30 && steeringOffset(view) < right.x - stick.x);
+    await shot(page, 'mobile-390-controls-steering-and-brake');
+
+    await moveContacts(page, stick);
+    view = await snapshot(page);
+    assert.deepEqual(view.input, { ...neutral, brake: true });
+    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    const centeredHeading = view.drive.player.heading;
+    await contact(page, 'touchMove', [left]);
+    await poll(async () => {
+      const view = await snapshot(page);
+      return view.input.brake && view.input.left && !view.input.right && steeringOffset(view) < -25 &&
+        headingDelta(view.drive.player.heading, centeredHeading) < -.20;
+    }, 'the same finger to reverse steering through the center');
+
+    await contact(page, 'touchEnd', [left]);
+    view = await snapshot(page);
+    assert.deepEqual(view.input, { ...neutral, brake: true });
+    assert.equal(object(view, 'held:brake').visible, true);
+    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    await contact(page, 'touchStart', [stick]);
+    await moveContacts(page, right);
+    await contact(page, 'touchEnd', [brake]);
+    view = await snapshot(page);
+    assert.deepEqual(view.input, { ...neutral, right: true });
+    assert.equal(object(view, 'held:brake').visible, false);
+    assert.ok(steeringOffset(view) > 30);
+
+    const otherStick = { ...left, id: 1 };
+    await contact(page, 'touchStart', [otherStick]);
+    await moveContacts(page, { ...otherStick, x: otherStick.x - 8 });
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, right: true });
+    await contact(page, 'touchEnd', [right]);
+    await moveContacts(page, { ...otherStick, x: otherStick.x + 70 });
+    view = await snapshot(page);
+    assert.deepEqual(view.input, neutral, 'A second touch must not take over the stick after its owner lifts');
+    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    await contact(page, 'touchEnd');
+
+    const otherBrake = { ...brake, id: 2, x: brake.x + 9 };
+    await contact(page, 'touchStart', [brake, otherBrake]);
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true });
+    await contact(page, 'touchEnd', [brake]);
+    assert.deepEqual((await snapshot(page)).input, neutral, 'A second touch must not keep the brake held');
+    await contact(page, 'touchEnd');
+
+    await contact(page, 'touchStart', [brake, stick]);
+    await moveContacts(page, right);
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true });
     await contact(page, 'touchCancel');
-    assert.deepEqual((await snapshot(page)).input, neutral);
-    const released = (await snapshot(page)).drive.player;
+    view = await snapshot(page);
+    assert.deepEqual(view.input, neutral);
+    assert.equal(object(view, 'held:brake').visible, false);
+    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    const released = view.drive.player;
     await poll(async () => {
       const player = (await snapshot(page)).drive?.player;
       return player && Math.hypot(player.x - released.x, player.y - released.y) > 4;
     }, 'vehicle to move again after cancellation');
+  });
+});
+
+test('Mobile driving releases captured controls on lost capture, pause, resize, and backgrounding', { timeout: 26000 }, async () => {
+  await inBrowser('mobile-controls-lifecycle', { width: 390, height: 600, mobile: true }, async page => {
+    await openMission(page, 'C1-01');
+    await start(page);
+
+    async function engage(observeSteer = false) {
+      const brake = await holdPoint(page, 'brake', 1);
+      const stick = await holdPoint(page, 'steer', 2);
+      const right = { ...stick, x: stick.x + 43 };
+      await contact(page, 'touchStart', [brake]);
+      if (observeSteer) await page.read(() => {
+        const canvas = document.querySelector('canvas');
+        const observed = window.steerCapture = {};
+        canvas.addEventListener('pointerdown', event => { observed.id = event.pointerId; }, { once: true });
+        canvas.addEventListener('lostpointercapture', event => {
+          if (event.pointerId === observed.id) observed.lost = event.isTrusted;
+        });
+      });
+      await contact(page, 'touchStart', [stick]);
+      await moveContacts(page, right);
+      assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true });
+      return { brake, stick, right };
+    }
+
+    function verifyReset(view) {
+      assert.deepEqual(view.input, neutral);
+      assert.ok(Math.abs(steeringOffset(view)) < 1);
+      assert.equal(object(view, 'held:brake').visible, false);
+    }
+
+    async function verifyLift({ brake, stick, right }) {
+      await moveContacts(page, { ...brake, x: brake.x + 8 }, { ...right, x: stick.x - 26 });
+      verifyReset(await snapshot(page));
+      await contact(page, 'touchEnd');
+      verifyReset(await snapshot(page));
+    }
+
+    const { right } = await engage(true);
+    assert.equal(await page.read(() => {
+      const canvas = document.querySelector('canvas');
+      const { id } = window.steerCapture;
+      if (!canvas.hasPointerCapture(id)) return false;
+      canvas.releasePointerCapture(id);
+      return true;
+    }), true);
+    await moveContacts(page, { ...right, x: right.x - 70 });
+    assert.equal(await page.read(() => window.steerCapture.lost), true);
+    let view = await snapshot(page);
+    assert.deepEqual(view.input, { ...neutral, brake: true });
+    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    await contact(page, 'touchEnd');
+    verifyReset(await snapshot(page));
+
+    const paused = await engage();
+    await page.press('Escape');
+    view = await phase(page, 'pause');
+    assert.deepEqual(view.input, neutral);
+    assert.equal(object(view, 'drive:steer'), undefined);
+    assert.equal(object(view, 'drive:brake'), undefined);
+    await page.press('Escape');
+    verifyReset(await phase(page, 'driving'));
+    await verifyLift(paused);
+
+    const resized = await engage();
+    await page.send('Emulation.setDeviceMetricsOverride', {
+      width: 360, height: 620, deviceScaleFactor: 1, mobile: true, screenWidth: 360, screenHeight: 620,
+    });
+    view = await poll(async () => {
+      const scene = await snapshot(page);
+      return scene.width === 360 && scene.height === 620 && scene;
+    }, 'active Pixi drive to resize');
+    assert.equal(view.phase, 'driving');
+    verifyTouchControls(view);
+    verifyReset(view);
+    await verifyLift(resized);
+
+    const backgrounded = await engage();
+    const foreground = await page.background();
+    try {
+      assert.deepEqual((await phase(page, 'pause')).input, neutral);
+    } finally {
+      await foreground();
+    }
+    await page.press('Escape');
+    verifyReset(await phase(page, 'driving'));
+    await verifyLift(backgrounded);
+  });
+});
+
+test('Wider touch-capable driving offers the stick and brake and keeps keyboard input available', { timeout: 18000 }, async () => {
+  await inBrowser('wide-touch-controls', { width: 900, height: 640 }, async page => {
+    await openMission(page, 'C1-01');
+    const desktop = await start(page);
+    for (const id of ['drive:left', 'drive:brake', 'drive:right']) assert.ok(control(desktop, id).interactive);
+    assert.ok(object(desktop, 'drive-help').visible);
+    assert.equal(control(desktop, 'drive:steer'), undefined);
+    const existingBrake = await page.center('drive:brake');
+    await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...existingBrake, button: 'left', buttons: 1 });
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true });
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...existingBrake, button: 'left' });
+    assert.deepEqual((await snapshot(page)).input, neutral);
+    await shot(page, 'desktop-900-controls');
+
+    await page.send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 2 });
+    const hybrid = await poll(async () => {
+      const view = await snapshot(page);
+      return view.width === 900 && control(view, 'drive:steer') && view;
+    }, 'the same wide canvas to expose touch controls');
+    verifyTouchControls(hybrid);
+    const stick = await holdPoint(page, 'steer', 1);
+    await page.key('ArrowDown', 'rawKeyDown');
+    await contact(page, 'touchStart', [stick]);
+    await moveContacts(page, { ...stick, x: stick.x - 38 });
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, left: true });
+    await contact(page, 'touchEnd');
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true });
+    await page.key('ArrowDown', 'keyUp');
+    assert.deepEqual((await snapshot(page)).input, neutral);
   });
 });
 
@@ -565,11 +782,13 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
       for (const { id, spawn, objective } of opening) {
         const preview = await openMission(page, id);
         assert.equal(Boolean(object(preview, 'teaching-inset')), id === 'C1-01');
+        assert.equal(object(preview, 'drive:steer'), undefined);
         if (id === 'C1-01') {
           verifyOpeningArt(preview);
           await shot(page, `mobile-${width}-briefing`);
         }
-        await start(page);
+        const active = await start(page);
+        verifyTouchControls(active);
         const releaseBrake = await holdBrake(page, true);
         await settle(page);
         const view = await snapshot(page);
@@ -589,6 +808,7 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
         if (id === 'C1-01') await verifyNeighborhood(page, view);
         if (id !== 'C1-02') await shot(page, `mobile-${width}-${id.toLowerCase()}-edge-cue`);
         await releaseBrake();
+        if (id === 'C1-01' && width === 320) await shot(page, 'mobile-320-controls-neutral');
         if (id === 'C1-01' && width === 390) {
           await page.click('drive:pause');
           await phase(page, 'pause');
@@ -605,7 +825,9 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
         assert.ok(Math.abs(mark.position.x - object(onRoad, 'player-car').position.x) < 4);
         assert.ok(await pixelSamples(page, await page.pixels(), { kind: 'aqua', ...mark.position }) > 70);
         if (id !== 'C1-02') await shot(page, `mobile-${width}-${id.toLowerCase()}-drive`);
-        await phase(page, 'success');
+        const success = await phase(page, 'success');
+        assert.equal(object(success, 'drive:steer'), undefined);
+        assert.equal(object(success, 'drive:brake'), undefined);
         if (id === 'C1-01') {
           if (width === 390) await shot(page, 'mobile-390-success');
           await page.click(action('bonus'));
@@ -1176,7 +1398,8 @@ test('Vehicle picker, viewport resize, and window focus release use real scene c
       const canvas = document.querySelector('canvas');
       return [canvas.clientWidth, canvas.clientHeight, canvas.style.width, canvas.style.height];
     }), [390, 600, '', '']);
-    await start(page);
+    const active = await start(page);
+    verifyTouchControls(active);
     await page.key('ArrowDown', 'rawKeyDown');
     assert.equal((await snapshot(page)).input.brake, true);
     const foreground = await page.background();

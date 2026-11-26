@@ -25,7 +25,7 @@ node --test tests/browser/acceptance.test.mjs
 
 The browser suite uses an installed Edge, Chrome, or Chromium with a temporary profile. See the [build guide](docs/chapter-1-build.md) for controls, browser discovery, and the verified scope.
 
-For the static package and deployment workflow, see [GitHub Pages](docs/chapter-1-build.md#github-pages).
+Push to `main` to publish. See [GitHub Pages](docs/chapter-1-build.md#github-pages) for deployment status and the optional local check.
 
 ## Resume on another machine
 

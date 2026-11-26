@@ -158,6 +158,8 @@ Replays pay the normal base amount and can award the same additional cash as a f
 2. **Gameplay.** Driving fills the viewport. Overlay exactly three icon-led indicators for the objective, car damage, and heat. Heat uses five fillable stars. Keep gameplay buttons above the driving view. Pause overlays gameplay.
 3. **Result and bonus postcards.** Success, failure, and the bonus briefing reuse the pre-job postcard layout, with actions appropriate to each result. Failure uses reusable postcards selected by loss cause and offers **Replay** or **Back to menu**.
 
+**Mobile driving controls.** Use a horizontal steering stick at the bottom right and a hold-to-brake pedal on the left. Players can steer and brake at the same time. Acceleration stays automatic and the desktop keyboard bindings carry forward. The PM verified the implementation locally in Edge on 26 November 2026.
+
 **District unlocks.** Show them on Home's Story map.
 
 ### Mission vehicle selection
@@ -181,7 +183,7 @@ Every vehicle has a **category** and a **tier**. The category tells you what the
 - **Supercar.** Highest top speed and quickest acceleration, **2 damage pips**, **1 crate**. Best when there's room to build speed.
 - **Van.** Wide turns, lower top speed, **6 damage pips**, **4 crates**. Breaks through foam construction barriers without damage.
 
-Driving stays automatic. Steering turns the body first, and the tires pull the car's momentum around over the next few frames. The hatchback grips sooner than the coupes. Fast turns leave short skid marks. Hold **S** or **↓**, or drag down on the map, to brake before a corner.
+Driving stays automatic. Steering turns the body first, and the tires pull the car's momentum around over the next few frames. The hatchback grips sooner than the coupes. Fast turns leave short skid marks. On desktop, steer with **Left / Right** or **A / D** and brake with **Down**, **S**, or **Space**.
 
 The player starts with a Tier 1 car. **Canal Ward requires Tier 1, Neon Strip requires Tier 2, and Breakwater Port requires Tier 3.** A Tier 2 hatchback should feel like a stronger hatchback and still carry less than a Tier 2 van. Starting with Tier 2, offer an affordable entry car and let players earn cash through replays for vehicles they want. On a replay that allows vehicle selection, higher tiers are eligible in earlier areas if the vehicle matches the mission's category.
 

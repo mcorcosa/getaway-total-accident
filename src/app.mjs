@@ -24,22 +24,25 @@ function start(app, gameUI, content, textures, attachObservation) {
   });
   const game = createGame(content, store);
   const keys = new Map();
-  const pointers = new Map();
   const captures = new Set();
+  const coarsePointer = window.matchMedia('(any-pointer: coarse)');
 
   function input() {
-    const active = new Set([...keys.values(), ...pointers.values()]);
+    const active = new Set([...keys.values(), ...ui.heldDirections()]);
     return { left: active.has('left'), right: active.has('right'), brake: active.has('brake') };
   }
 
-  function clearInput() {
-    keys.clear();
-    pointers.clear();
+  function clearPointerInput() {
+    ui.cancel();
     for (const id of captures) {
       if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
     }
     captures.clear();
-    ui.cancel();
+  }
+
+  function clearInput() {
+    keys.clear();
+    clearPointerInput();
     accumulator = 0;
     lastFrame = undefined;
   }
@@ -53,8 +56,7 @@ function start(app, gameUI, content, textures, attachObservation) {
   }
 
   function capture(id) {
-    if (canvas.hasPointerCapture(id)) return;
-    canvas.setPointerCapture(id);
+    if (!canvas.hasPointerCapture(id)) canvas.setPointerCapture(id);
     captures.add(id);
   }
 
@@ -70,7 +72,7 @@ function start(app, gameUI, content, textures, attachObservation) {
 
   ui = gameUI(app, content, textures, game, {
     act, input, capture, press,
-    hold(id, direction) { capture(id); pointers.set(id, direction); ui.draw(input()); },
+    hasTouchInput: () => coarsePointer.matches || navigator.maxTouchPoints > 0,
     invalidate() { dirty = true; },
     present,
   });
@@ -99,9 +101,8 @@ function start(app, gameUI, content, textures, attachObservation) {
   });
 
   function release(event) {
-    ui.release(event.pointerId);
     captures.delete(event.pointerId);
-    if (pointers.delete(event.pointerId)) ui.draw(input());
+    if (ui.release(event.pointerId)) ui.draw(input());
   }
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     window.addEventListener(type, release, true);
@@ -116,8 +117,15 @@ function start(app, gameUI, content, textures, attachObservation) {
   window.addEventListener('blur', pauseOnLeave);
   document.addEventListener('visibilitychange', () => { if (document.hidden) pauseOnLeave(); });
   new ResizeObserver(() => {
-    if (resize(app)) ui.show(true);
+    if (!resize(app)) return;
+    if (game.state.phase === 'driving') clearPointerInput();
+    ui.show(true);
   }).observe(canvas);
+  coarsePointer.addEventListener('change', () => {
+    if (game.state.phase !== 'driving') return;
+    clearPointerInput();
+    ui.show(true);
+  });
 
   function frame(now) {
     if (game.state.phase === 'driving') {
