@@ -16,15 +16,21 @@ const authoredContent = () => loadContent({
 // These are the Level Design author's validated routes for the authored map.
 const [northwest, northeast, southwest, southeast, junction] =
   [[128, 128], [448, 128], [128, 448], [448, 448], [288, 448]].map(([x, y]) => ({ x, y }));
+const lowerWest = { x: 128, y: 1160 };
+const lowerEast = { x: 448, y: 1160 };
+const farWest = { x: 128, y: 1660 };
+const farEast = { x: 448, y: 1660 };
+const westBranch = [junction, southwest, northwest];
+const eastBranch = [junction, southeast, northeast];
 const mainTurns = new Map([
-  [4, [northwest]], [5, [northeast]], [6, [northeast]], [7, [junction, southwest, northwest]],
-  [9, [northwest]], [11, [northwest]], [12, [southwest]], [13, [southwest]],
-  [14, [northeast]], [15, [northeast]], [16, [junction, southwest, northwest]], [18, [northwest]],
-  [19, [southeast]], [20, [northwest]], [21, [northwest]],
+  [4, [northwest]], [5, [northeast]], [6, [northeast]], [7, westBranch],
+  [9, [northwest]], [11, [northwest]], [12, [farEast, farWest]], [13, [farWest]],
+  [14, [northeast]], [15, [northeast]], [16, westBranch], [18, [northwest]],
+  [19, [farEast]], [20, [northeast, northwest]], [21, [northeast, northwest]],
 ]);
 const bonusTurns = new Map([
-  [9, [northwest]], [10, [northwest]], [11, [northwest]], [12, [southwest]], [13, [southwest]],
-  [14, [northeast]], [15, [northeast]], [16, [northwest]], [17, [northwest]], [18, [northwest]], [19, [southeast]],
+  [9, [lowerWest]], [10, [lowerWest]], [11, [lowerWest]], [12, [lowerWest]], [13, [farWest]],
+  [14, [northeast]], [16, [northwest]], [17, [northwest]], [18, [northwest]], [19, [lowerEast]],
 ]);
 
 function guide(path) {
@@ -68,12 +74,19 @@ function followRoute(game, turns, neutral, label) {
   const { drive } = game.state.run;
   const path = [drive.segment.spawn, ...turns, drive.segment.objective.destination];
   const nextInput = neutral ? () => NEUTRAL_INPUT : guide(path);
-  for (let i = 0; i < 1_200 && game.state.phase === 'driving'; i += 1) {
+  let length = 0;
+  for (let index = 1; index < path.length; index += 1) length += distance(path[index - 1], path[index]);
+  const stepLimit = Math.ceil((length / drive.vehicle.speed + 2 + turns.length) / STEP);
+  let steps = 0;
+  while (steps < stepLimit && game.state.phase === 'driving') {
     game.tick(nextInput(drive.player));
+    steps += 1;
   }
-  assert.equal(drive.outcome?.kind, 'success', `${label} did not clear`);
+  const seconds = steps * STEP;
+  assert.equal(drive.outcome?.kind, 'success', `${label} did not clear after ${seconds.toFixed(2)}s`);
   assert.equal(drive.pickedUp, Boolean(drive.segment.objective.pickup), `${label} pickup`);
   assert.equal(drive.damage, drive.vehicle.maxDamage, `${label} damage`);
+  return seconds;
 }
 
 test('the authored chapter loads through the standard loader and all three opening jobs clear without steering or braking', async () => {
@@ -91,8 +104,9 @@ test('the authored chapter loads through the standard loader and all three openi
     assert.ok(roadLine(drive.map, mission.spawn, target), `${mission.id} has a clear path toward the target`);
     const sizes = [[320, 568], [390, 600]];
     const reachedWorldMarker = new Set();
+    const stepLimit = Math.ceil((distance(mission.spawn, target) / drive.vehicle.speed + 2) / STEP);
     let steps = 0;
-    while (steps < 1_800 && game.state.phase === 'driving') {
+    while (steps < stepLimit && game.state.phase === 'driving') {
       for (const [width, height] of sizes) {
         const { view, zoom, safe } = driveFrame(width, height, drive.player, target, { hudBottom: 100, footerTop: height - 60 });
         const x = (target.x - view.x) * zoom;
@@ -112,7 +126,7 @@ test('the authored chapter loads through the standard loader and all three openi
     bank += mission.payout;
     assert.equal(game.state.progress.bank, bank);
   }
-  assert.deepEqual(clearSteps, [207, 269, 276], 'The opening drives clear on their expected simulation steps');
+  assert.deepEqual(clearSteps, [600, 655, 761], 'The longer opening drives clear on their expected simulation steps');
 });
 
 test('vehicle pace comes from the catalog in both the authored chapter and the fixture', async () => {
@@ -191,7 +205,7 @@ test('the authored Canal Ward shows closed cross streets without covering active
 });
 
 for (const vehicleId of [STARTER_VEHICLE_ID, 'street-coupe']) {
-  test(`all 21 authored mains and bonuses clear in the ${vehicles[vehicleId].name}`, async () => {
+  test(`all 21 authored mains and bonuses clear in the ${vehicles[vehicleId].name}`, async t => {
     const content = await authoredContent();
     const records = new Map();
     const storage = { getItem: key => records.get(key) ?? null, setItem: (key, value) => records.set(key, value) };
@@ -202,6 +216,8 @@ for (const vehicleId of [STARTER_VEHICLE_ID, 'street-coupe']) {
     const store = progressStore(content.chapter, { getStorage });
     const game = createGame(content, store);
     let bank = 0;
+    const mainTimes = [];
+    const bonusTimes = [];
 
     for (const [index, mission] of content.chapter.missions.entries()) {
       const order = index + 1;
@@ -210,7 +226,7 @@ for (const vehicleId of [STARTER_VEHICLE_ID, 'street-coupe']) {
       assert.equal(game.dispatch('start'), true, mission.id);
       assert.equal(game.state.run.drive.vehicle, vehicles[vehicleId]);
       assert.equal(game.state.run.drive.segment, mission);
-      followRoute(game, mainTurns.get(order) ?? [], order <= 3, `${mission.id} main`);
+      mainTimes.push(followRoute(game, mainTurns.get(order) ?? [], order <= 3, `${mission.id} main`));
       assert.equal(game.state.phase, 'success');
       assert.equal(game.state.progress.cleared.at(-1), mission.id);
       assert.equal(game.state.progress.bank, bank);
@@ -220,7 +236,7 @@ for (const vehicleId of [STARTER_VEHICLE_ID, 'street-coupe']) {
       assert.equal(game.dispatch('start'), true);
       assert.equal(game.state.run.drive.vehicle, vehicles[vehicleId]);
       assert.equal(game.state.run.drive.segment, mission.bonus);
-      followRoute(game, bonusTurns.get(order) ?? [], order <= 8, `${mission.id} bonus`);
+      bonusTimes.push(followRoute(game, bonusTurns.get(order) ?? [], order <= 8, `${mission.id} bonus`));
       bank += mission.payout + mission.bonus.payout;
       assert.equal(game.state.phase, 'home');
       assert.equal(game.state.progress.bank, bank);
@@ -231,5 +247,26 @@ for (const vehicleId of [STARTER_VEHICLE_ID, 'street-coupe']) {
     assert.equal(reloaded.state.progress.pending, null);
     assert.equal(reloaded.state.progress.bank, bank);
     assert.deepEqual(reloaded.state.progress.cleared, content.chapter.missions.map(mission => mission.id));
+    t.diagnostic(`Main seconds in mission order: ${mainTimes.map(time => time.toFixed(3)).join(', ')}`);
+    t.diagnostic(`Bonus seconds in mission order: ${bonusTimes.map(time => time.toFixed(3)).join(', ')}`);
   });
 }
+
+test('both coupes can also take the eastern branch on C1-07 and C1-16', async () => {
+  const content = await authoredContent();
+  for (const index of [6, 15]) {
+    const mission = content.chapter.missions[index];
+    const cleared = content.chapter.missions.slice(0, index).map(({ id }) => id);
+    const ownedVehicleIds = [STARTER_VEHICLE_ID, 'street-coupe'];
+    for (const vehicleId of ownedVehicleIds) {
+      const game = createGame(content, {
+        read: () => ({ ...newProgress(), cleared, ownedVehicleIds }),
+        write: progress => progress,
+      });
+      assert.equal(game.dispatch('open', mission.id), true);
+      assert.equal(game.dispatch('vehicle', vehicleId), true);
+      assert.equal(game.dispatch('start'), true);
+      followRoute(game, eastBranch, false, `${mission.id} east branch in the ${vehicles[vehicleId].name}`);
+    }
+  }
+});

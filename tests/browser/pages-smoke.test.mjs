@@ -110,7 +110,7 @@ test('Pages project URL serves Chapter 1 and banks an authored Mission 1 clear',
       const cleared = await poll(async () => {
         const save = await storage(page);
         return save?.pending && save;
-      }, 'Mission 1 clear and pending haul', 12000);
+      }, 'Mission 1 clear and pending haul', 16000);
       assert.deepEqual(cleared.cleared, ['C1-01']);
       assert.equal(cleared.pending.missionId, 'C1-01');
       assert.equal(cleared.pending.haul, 100);

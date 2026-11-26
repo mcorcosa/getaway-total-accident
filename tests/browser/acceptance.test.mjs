@@ -7,6 +7,7 @@ import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { gameServer } from '../../scripts/serve.mjs';
 import { SAVE_KEY } from '../../src/save.mjs';
+import { STARTER_VEHICLE_ID, vehicles } from '../../src/vehicles.mjs';
 import { launchBrowser, openPage, poll } from './cdp.mjs';
 
 const mainPayout = 100;
@@ -56,18 +57,24 @@ function snapshot(page) {
 const object = (view, label) => view.scene.find(node => node.label === label);
 const control = (view, id) => view.controls.find(item => item.id === id);
 
-async function phase(page, expected) {
+async function phase(page, expected, timeout) {
   try {
     return await poll(async () => {
       const view = await snapshot(page);
       return view?.phase === expected && view;
-    }, `phase ${expected}`);
+    }, `phase ${expected}`, timeout);
   } catch (error) {
     const observed = await page.read(() => ({
       phase: window.__getawayScene?.()?.phase, title: document.title, canvas: document.querySelector('canvas')?.ariaLabel,
     }));
     throw new Error(`${error.message}; observed ${JSON.stringify(observed)}; browser errors ${JSON.stringify(page.errors)}`);
   }
+}
+
+function straightDriveTimeout({ spawn, objective: { destination } }) {
+  const distance = Math.hypot(destination.x - spawn.x, destination.y - spawn.y);
+  const { speed } = vehicles[STARTER_VEHICLE_ID];
+  return Math.ceil(distance * 1000 / speed + 4000);
 }
 
 async function settle(page) {
@@ -388,18 +395,27 @@ function visibleObjective(view) {
   return visible;
 }
 
+function waitForWorldDestination(page, id, timeout) {
+  return poll(async () => {
+    const view = await snapshot(page);
+    return view.phase === 'driving' && object(view, 'world-destination').visible && view;
+  }, `${id} hands off naturally from the edge cue to the on-road marker`, timeout);
+}
+
 async function verifyNeighborhood(page, view) {
   const { hudBottom, footerTop } = playfield(view);
   const overlays = view.scene.filter(node => node.visible && node.ancestor === 'driving-controls').map(node => node.bounds);
   assert.equal(object(view, 'context-streets').ancestor, 'world-geometry');
   assert.equal(object(view, 'canal-buildings').ancestor, 'world-geometry');
-  const closure = view.scene.find(node => {
+  const closures = view.scene.filter(node => {
     if (node.ancestor !== 'road-closures' || !node.visible) return false;
     const { x, y, width, height } = node.bounds;
     if (x <= 1 || x + width >= view.width - 1 || y <= hudBottom + 1 || y + height >= view.height - 1) return false;
     return overlays.every(box => x + width < box.x - 1 || x > box.x + box.width + 1 ||
       y + height < box.y - 1 || y > box.y + box.height + 1);
   });
+  const centerDistance = ({ bounds }) => Math.abs(bounds.x + bounds.width / 2 - view.width / 2);
+  const [closure] = closures.sort((a, b) => centerDistance(a) - centerDistance(b));
   assert.ok(closure, 'The playable view contains an unobstructed barricade on a nearby closed street');
   const integerBounds = Object.fromEntries(Object.entries(closure.bounds).map(([key, value]) => [key, Math.round(value)]));
   const screen = await page.pixels();
@@ -410,7 +426,8 @@ async function verifyNeighborhood(page, view) {
 }
 
 async function captureFirstBend(page, name, mobile) {
-  const briefing = await openMission(page, 'C1-04');
+  const segment = chapter.missions[3];
+  const briefing = await openMission(page, segment.id);
   assert.ok(object(briefing, 'teaching-inset').visible);
   assert.ok(object(briefing, 'context-streets').visible);
   await start(page);
@@ -424,7 +441,7 @@ async function captureFirstBend(page, name, mobile) {
     const view = await snapshot(page);
     const { player, objective } = view.drive;
     return player.y - objective.destination.y < 48 && view;
-  }, 'approach the first bend under normal driving');
+  }, 'approach the first bend under normal driving', straightDriveTimeout(segment));
   assert.ok(approach.drive.damage === 4);
   releaseBrake = await holdBrake(page, mobile);
   const keepBrake = keepBrakeFresh(page, mobile, releaseBrake);
@@ -452,15 +469,23 @@ async function captureFirstBend(page, name, mobile) {
   else await page.key('ArrowRight', 'keyUp');
   if (!mobile) {
     await releaseBrake();
+    await settle(page);
     releaseBrake = await holdBrake(page, false);
     await poll(async () => (await snapshot(page)).drive.player.speed === 0, 'stop before sampling the water');
-    await settle(page);
-    const first = await page.pixels();
-    await delay(550);
-    const second = await page.pixels();
+    const clip = { x: 12, y: 68, width: 135, height: 50, scale: 1 };
+    const sampleWater = async () => {
+      const result = await page.send('Page.captureScreenshot', { format: 'png', fromSurface: true, clip });
+      return Buffer.from(result.data, 'base64');
+    };
+    const { x, y } = (await snapshot(page)).drive.player;
+    const first = await sampleWater();
+    await delay(160);
+    const second = await sampleWater();
+    const stationary = (await snapshot(page)).drive.player;
+    assert.deepEqual([stationary.x, stationary.y, stationary.speed], [x, y, 0], 'The camera stays still between water samples');
     await Promise.all([writeFile(join(evidence, `${name}-c1-04-water-shimmer-a.png`), first),
       writeFile(join(evidence, `${name}-c1-04-water-shimmer-b.png`), second)]);
-    const motion = await pixelSamples(page, first, { kind: 'shift', x: 12, y: 151, width: 100, height: 160,
+    const motion = await pixelSamples(page, first, { kind: 'shift', x: 0, y: 0, width: clip.width, height: clip.height,
       next: second.toString('base64'), dy: 0 });
     assert.ok(motion.changed > .035 && motion.mean < 3, `Stationary viewing shows subtle moving water: ${JSON.stringify(motion)}`);
   }
@@ -479,8 +504,9 @@ function angleDifference(a, b) {
   return Math.abs(headingDelta(a, b));
 }
 
-test('Authored Home, briefing, paused driving, hands-off clear, bonus return and single bank', { timeout: 40000 }, async () => {
+test('Authored Home, briefing, paused driving, hands-off clear, bonus return and single bank', { timeout: 70000 }, async () => {
   await inBrowser('desktop', {}, async page => {
+    const [first, ...otherOpeners] = chapter.missions.slice(0, 3);
     const home = await snapshot(page);
     assert.equal(object(home, 'menu-title').text, 'PALMERA BAY');
     assert.equal(object(home, 'bank-balance').text, money(0));
@@ -512,7 +538,9 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
 
     await start(page);
     const releaseBrake = await holdBrake(page, false);
-    await verifyNeighborhood(page, await snapshot(page));
+    const launch = await snapshot(page);
+    assert.equal(visibleObjective(launch).label, 'edge-destination');
+    await verifyNeighborhood(page, launch);
     await shot(page, 'desktop-c1-01-closed-junction');
     await releaseBrake();
     await page.press('Escape');
@@ -540,6 +568,12 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
     assert.equal(active.activeHost, true);
     assert.equal(active.modal, null);
     await shot(page, 'desktop-drive');
+    const onRoad = await waitForWorldDestination(page, first.id, straightDriveTimeout(first));
+    assert.deepEqual(onRoad.input, neutral);
+    const mark = visibleObjective(onRoad);
+    assert.equal(mark.label, 'world-destination');
+    assert.ok(await pixelSamples(page, await page.pixels(), { kind: 'aqua', ...mark.position }) > 70);
+    await shot(page, 'desktop-c1-01-world-marker');
     const success = await phase(page, 'success');
     verifyDialog(success, ['Continue to Story', 'Bonus']);
     const haul = object(success, 'card-copy').text;
@@ -562,10 +596,10 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
     await bank(page, 2);
     await assertClear(page, mainPayout, null);
     assertNextMission(await reload(page, 'home'), mainPayout);
-    for (const { id } of chapter.missions.slice(1, 3)) {
-      await openMission(page, id);
+    for (const opener of otherOpeners) {
+      await openMission(page, opener.id);
       await start(page);
-      await phase(page, 'success');
+      await phase(page, 'success', straightDriveTimeout(opener));
       await bank(page);
     }
     await captureFirstBend(page, 'desktop', false);
@@ -574,9 +608,10 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
 
 test('Authored M1 bonus success carries condition and automatically banks both payouts', { timeout: 24000 }, async () => {
   await inBrowser('bonus-success', {}, async page => {
-    await openMission(page, 'C1-01');
+    const first = chapter.missions[0];
+    await openMission(page, first.id);
     await start(page);
-    await phase(page, 'success');
+    await phase(page, 'success', straightDriveTimeout(first));
     await assertClear(page, 0, pendingMain);
     await page.click(action('bonus'));
     await phase(page, 'bonus-briefing');
@@ -584,7 +619,7 @@ test('Authored M1 bonus success carries condition and automatically banks both p
     assert.equal(active.drive.damage, 4);
     assert.equal(active.run.bonus, true);
     assert.equal(active.progress.pending, null);
-    await phase(page, 'home');
+    await phase(page, 'home', straightDriveTimeout(first.bonus));
     await assertClear(page, mainPayout + bonusPayout, null);
     assertNextMission(await snapshot(page), mainPayout + bonusPayout);
   });
@@ -994,11 +1029,12 @@ test('Wider touch-capable driving offers the stick and brake and keeps keyboard 
 });
 
 for (const [width, height] of [[390, 600], [320, 568]]) {
-  test(`${width}×${height} leads all three opening drives from the edge cue to the on-road target`, { timeout: 36000 }, async () => {
+  test(`${width}×${height} leads all three opening drives from the edge cue to the on-road target`, { timeout: 65000 }, async () => {
     await inBrowser(`mobile-markers-${width}`, { width, height, mobile: true }, async page => {
       await shot(page, `mobile-${width}-story`);
       const opening = chapter.missions.slice(0, 3);
-      for (const { id, spawn, objective } of opening) {
+      for (const opener of opening) {
+        const { id, spawn, objective } = opener;
         const preview = await openMission(page, id);
         assert.equal(Boolean(object(preview, 'teaching-inset')), id === 'C1-01');
         assert.equal(object(preview, 'drive:steer'), undefined);
@@ -1008,14 +1044,14 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
         }
         const active = await start(page);
         verifyTouchControls(active);
+        assert.equal(active.drive.player.heading, spawn.heading);
+        assert.ok(Math.hypot(active.drive.player.x - spawn.x, active.drive.player.y - spawn.y) < 6);
         const releaseBrake = await holdBrake(page, true);
         await settle(page);
         const view = await snapshot(page);
         assert.deepEqual([view.width, view.height], [width, height]);
         assert.match(object(view, 'objective-text').text, /reach the marker/i);
         assert.deepEqual(view.drive.objective, objective);
-        assert.equal(view.drive.player.heading, spawn.heading);
-        assert.ok(Math.hypot(view.drive.player.x - spawn.x, view.drive.player.y - spawn.y) < 6);
         const cue = visibleObjective(view);
         assert.equal(cue.label, 'edge-destination', `${id} starts with the longer target outside the playfield`);
         const car = object(view, 'player-car');
@@ -1034,10 +1070,7 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
           await shot(page, 'mobile-390-pause');
           await page.click(action('resume'));
         }
-        const onRoad = await poll(async () => {
-          const current = await snapshot(page);
-          return current.phase === 'driving' && object(current, 'world-destination').visible && current;
-        }, `${id} hands off naturally from the edge cue to the on-road marker`);
+        const onRoad = await waitForWorldDestination(page, id, straightDriveTimeout(opener));
         assert.deepEqual(onRoad.input, neutral);
         const mark = visibleObjective(onRoad);
         assert.equal(mark.label, 'world-destination');
@@ -1063,18 +1096,22 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
   });
 }
 
-async function turnAcrossStreet(page, target) {
+async function turnAcrossStreet(page, target, tolerance = .105) {
   const liftBrake = await holdBrake(page, false);
   const keepBrake = keepBrakeFresh(page, false, liftBrake);
   await delay(110);
   const initial = (await snapshot(page)).drive.player.heading;
   const turn = Math.atan2(Math.sin(target - initial), Math.cos(target - initial));
+  if (Math.abs(turn) < tolerance) {
+    await liftBrake();
+    return;
+  }
   const direction = turn < 0 ? 'ArrowLeft' : 'ArrowRight';
   await page.key(direction, 'rawKeyDown');
   try {
     await poll(async () => {
       const view = await snapshot(page);
-      if (view.phase === 'driving' && angleDifference(view.drive.player.heading, target) < .105) return true;
+      if (view.phase === 'driving' && angleDifference(view.drive.player.heading, target) < tolerance) return true;
       await keepBrake();
       return false;
     }, `keyboard steering to ${target.toFixed(2)} radians`, 4200);
@@ -1127,17 +1164,22 @@ test('An authored M1 bonus wreck loses the haul, preserves the main clear, and s
       const drive = (await snapshot(page)).drive;
       return Math.abs(drive.player.x - drive.objective.destination.x) < 16;
     }, 'car aligned near the center of the road');
-    const aimAtMarker = async () => {
+    const { spawn, objective: { destination } } = chapter.missions[0];
+    const legs = Math.ceil((spawn.y - destination.y) / 240);
+    for (let legsLeft = legs; legsLeft > 0; legsLeft -= 1) {
       await page.key('ArrowDown', 'rawKeyDown');
-      await poll(async () => (await snapshot(page)).drive.player.speed < 1, 'brake before aiming at the marker');
-      const { player, objective } = (await snapshot(page)).drive;
-      await turnAcrossStreet(page, Math.atan2(objective.destination.y - player.y, objective.destination.x - player.x));
-    };
-    await aimAtMarker();
-    const { spawn, objective } = chapter.missions[0];
-    const midway = (spawn.y + objective.destination.y) / 2;
-    await poll(async () => (await snapshot(page)).drive.player.y <= midway, 'drive halfway toward the longer opening target');
-    await aimAtMarker();
+      await poll(async () => Math.abs((await snapshot(page)).drive.player.speed) < 1, 'brake before aiming up the street');
+      const { player } = (await snapshot(page)).drive;
+      const nextY = destination.y + (player.y - destination.y) * (legsLeft - 1) / legsLeft;
+      await turnAcrossStreet(page, Math.atan2(nextY - player.y, destination.x - player.x), .065);
+      if (legsLeft > 1) {
+        await poll(async () => {
+          const view = await snapshot(page);
+          assert.equal(view.drive.damage, 3, 'The car keeps its one impact on the way to the main finish');
+          return view.drive.player.y <= nextY;
+        }, 'drive to the next point on the opening street');
+      }
+    }
     await phase(page, 'success');
     await assertClear(page, 0, { ...pendingMain, damage: 3 });
     await page.click(action('bonus'));
@@ -1301,7 +1343,7 @@ test('Story clamps real wheel, touch, and keyboard input at Mission 1 and reache
     await page.press('Enter');
     await phase(page, 'briefing');
     await start(page);
-    await phase(page, 'success');
+    await phase(page, 'success', straightDriveTimeout(chapter.missions[0]));
     const advanced = await bank(page);
     assert.equal(advanced.focus, mission('C1-02'));
     assert.ok(control(advanced, advanced.focus).interactive);
@@ -1635,7 +1677,7 @@ test('Vehicle picker, viewport resize, and window focus release use real scene c
     await page.press('Escape');
     view = await phase(page, 'driving');
     assert.deepEqual(view.input, neutral);
-    await phase(page, 'success');
+    await phase(page, 'success', straightDriveTimeout(chapter.missions[0]));
   });
 });
 
