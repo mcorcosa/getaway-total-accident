@@ -7,12 +7,12 @@
       "id": "C1-01",
       "title": "Reach the Marker",
       "flavour": "I’ve marked a spot up the street.",
-      "instructions": "The car accelerates on its own. Let it drive straight into the marker.",
+      "instructions": "The car accelerates on its own. Let it carry you straight north to the marker.",
       "minTier": 1,
       "defaultVehicleId": "starter-coupe",
       "allowVehicleSelection": true,
-      "mapPieceIds": ["canal-west"],
-      "spawn": { "x": 128, "y": 350, "heading": -1.5707963267948966 },
+      "mapPieceIds": ["canal-west", "canal-west-approach"],
+      "spawn": { "x": 128, "y": 624, "heading": -1.5707963267948966 },
       "objective": {
         "kind": "delivery",
         "destination": { "x": 128, "y": 224, "radius": 24 }
@@ -33,12 +33,12 @@
       "id": "C1-02",
       "title": "Same Goal, New Street",
       "flavour": "Try the same move one street over.",
-      "instructions": "Drive straight to the marker.",
+      "instructions": "Keep straight north. The marker is up ahead.",
       "minTier": 1,
       "defaultVehicleId": "starter-coupe",
       "allowVehicleSelection": true,
-      "mapPieceIds": ["canal-east"],
-      "spawn": { "x": 448, "y": 340, "heading": -1.5707963267948966 },
+      "mapPieceIds": ["canal-east", "canal-east-approach"],
+      "spawn": { "x": 448, "y": 746, "heading": -1.5707963267948966 },
       "objective": {
         "kind": "delivery",
         "destination": { "x": 448, "y": 222, "radius": 24 }
@@ -59,12 +59,12 @@
       "id": "C1-03",
       "title": "Down the Block",
       "flavour": "The next marker is farther down the block.",
-      "instructions": "Keep the wheel straight until you reach the marker.",
+      "instructions": "Keep going straight north to the marker.",
       "minTier": 1,
       "defaultVehicleId": "starter-coupe",
       "allowVehicleSelection": true,
-      "mapPieceIds": ["canal-west"],
-      "spawn": { "x": 128, "y": 392, "heading": -1.5707963267948966 },
+      "mapPieceIds": ["canal-west", "canal-west-approach"],
+      "spawn": { "x": 128, "y": 762, "heading": -1.5707963267948966 },
       "objective": {
         "kind": "delivery",
         "destination": { "x": 128, "y": 224, "radius": 24 }
@@ -90,7 +90,7 @@
       "defaultVehicleId": "starter-coupe",
       "allowVehicleSelection": true,
       "mapPieceIds": ["canal-west", "canal-north"],
-      "spawn": { "x": 128, "y": 302, "heading": -1.5707963267948966 },
+      "spawn": { "x": 128, "y": 410, "heading": -1.5707963267948966 },
       "objective": {
         "kind": "delivery",
         "destination": { "x": 288, "y": 128, "radius": 24 }
@@ -116,7 +116,7 @@
       "defaultVehicleId": "starter-coupe",
       "allowVehicleSelection": true,
       "mapPieceIds": ["canal-east", "canal-north"],
-      "spawn": { "x": 448, "y": 306, "heading": -1.5707963267948966 },
+      "spawn": { "x": 448, "y": 418, "heading": -1.5707963267948966 },
       "objective": {
         "kind": "delivery",
         "destination": { "x": 288, "y": 128, "radius": 24 }
@@ -142,7 +142,7 @@
       "defaultVehicleId": "starter-coupe",
       "allowVehicleSelection": true,
       "mapPieceIds": ["canal-east", "canal-north"],
-      "spawn": { "x": 278, "y": 128, "heading": 0 },
+      "spawn": { "x": 174, "y": 128, "heading": 0 },
       "objective": {
         "kind": "delivery",
         "destination": { "x": 448, "y": 290, "radius": 24 }
@@ -193,8 +193,8 @@
       "minTier": 1,
       "defaultVehicleId": "starter-coupe",
       "allowVehicleSelection": true,
-      "mapPieceIds": ["canal-east"],
-      "spawn": { "x": 448, "y": 414, "heading": -1.5707963267948966 },
+      "mapPieceIds": ["canal-east", "canal-east-approach"],
+      "spawn": { "x": 448, "y": 690, "heading": -1.5707963267948966 },
       "objective": {
         "kind": "delivery",
         "destination": { "x": 448, "y": 290, "radius": 24 }

@@ -1,0 +1,244 @@
+{
+  "schemaVersion": 1,
+  "district": "canal-ward",
+  "pixelsPerUnit": 4,
+  "colorSpace": "sRGB",
+  "axes": {
+    "x": "east",
+    "y": "south",
+    "headingUnit": "radians"
+  },
+  "catalogs": [
+    "roads/catalog.json"
+  ],
+  "assets": [
+    {
+      "id": "starter-coupe",
+      "category": "car",
+      "file": "cars/starter-coupe.png",
+      "widthPx": 102,
+      "heightPx": 66,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 24,
+        "height": 13,
+        "bounds": {
+          "minX": -12.0,
+          "minY": -6.5,
+          "maxX": 12.0,
+          "maxY": 6.5
+        },
+        "anchor": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "pivotPx": {
+        "x": 51.0,
+        "y": 34.268
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "facing": "east",
+        "headingRad": 0
+      },
+      "repeatAxes": [],
+      "sha256": "03f1e7df4e981167ee4d98ffc02ab20ddce3d8d129f43025a1a1d7508c8b5b98"
+    },
+    {
+      "id": "patrol",
+      "category": "car",
+      "file": "cars/patrol.png",
+      "widthPx": 106,
+      "heightPx": 66,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 25,
+        "height": 13,
+        "bounds": {
+          "minX": -12.5,
+          "minY": -6.5,
+          "maxX": 12.5,
+          "maxY": 6.5
+        },
+        "anchor": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "pivotPx": {
+        "x": 53.0,
+        "y": 33.709
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "facing": "east",
+        "headingRad": 0
+      },
+      "repeatAxes": [],
+      "sha256": "559f385f4ced769c6bdfacb4083a9d51bc67bad55b96ec0c24699fd81420c29d"
+    },
+    {
+      "id": "canal-house",
+      "category": "building",
+      "file": "buildings/canal-house.png",
+      "widthPx": 122,
+      "heightPx": 156,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 28,
+        "height": 32,
+        "bounds": {
+          "minX": -14.0,
+          "minY": -16.0,
+          "maxX": 14.0,
+          "maxY": 16.0
+        },
+        "anchor": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "pivotPx": {
+        "x": 61.0,
+        "y": 89.0
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "frontage": "south"
+      },
+      "repeatAxes": [],
+      "sha256": "e7546098bf227e69c197dd0741044545862afacb2d9c8554eeb11cb86d95ba0b"
+    },
+    {
+      "id": "neighborhood-garage",
+      "category": "building",
+      "file": "buildings/neighborhood-garage.png",
+      "widthPx": 218,
+      "heightPx": 160,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 52,
+        "height": 32,
+        "bounds": {
+          "minX": -26.0,
+          "minY": -16.0,
+          "maxX": 26.0,
+          "maxY": 16.0
+        },
+        "anchor": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "pivotPx": {
+        "x": 109.0,
+        "y": 92.0
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "frontage": "south"
+      },
+      "repeatAxes": [],
+      "sha256": "6847b5476968fbb2f9b26231c20629786aa2784c03ff68d75179d1d2753e71be"
+    },
+    {
+      "id": "striped-barricade",
+      "category": "prop",
+      "file": "props/striped-barricade.png",
+      "widthPx": 50,
+      "heightPx": 19,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 11,
+        "height": 2,
+        "bounds": {
+          "minX": -5.5,
+          "minY": -1.0,
+          "maxX": 5.5,
+          "maxY": 1.0
+        },
+        "anchor": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "pivotPx": {
+        "x": 25.043,
+        "y": 13.906
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "longAxis": "+x",
+        "frontage": "south",
+        "headingRad": 0
+      },
+      "repeatAxes": [],
+      "sha256": "9402edd93d8f8c7bc6830c595e19929ea4023aa571e46f7bcdc09438b5055a4d"
+    },
+    {
+      "id": "canal-palm",
+      "category": "prop",
+      "file": "props/canal-palm.png",
+      "widthPx": 86,
+      "heightPx": 84,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 1.25,
+        "height": 1.25,
+        "bounds": {
+          "minX": -0.625,
+          "minY": -0.625,
+          "maxX": 0.625,
+          "maxY": 0.625
+        },
+        "anchor": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "pivotPx": {
+        "x": 41.942,
+        "y": 78.958
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "screenProjection": "south"
+      },
+      "repeatAxes": [],
+      "sha256": "54f163d7841b4420b3f8b901977d477e3cc5fa7f266c07f452810985c2a1550b"
+    },
+    {
+      "id": "street-lamp",
+      "category": "prop",
+      "file": "props/street-lamp.png",
+      "widthPx": 20,
+      "heightPx": 33,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 1.5,
+        "height": 1.5,
+        "bounds": {
+          "minX": -0.75,
+          "minY": -0.75,
+          "maxX": 0.75,
+          "maxY": 0.75
+        },
+        "anchor": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "pivotPx": {
+        "x": 9.974,
+        "y": 27.073
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "screenProjection": "south"
+      },
+      "repeatAxes": [],
+      "sha256": "1cabd6db8b3ac207a4fc2595354fd4a0ee1e711e95dee710002439ebdc6229aa"
+    }
+  ]
+}

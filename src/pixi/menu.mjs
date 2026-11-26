@@ -1,4 +1,4 @@
-import { MeshSimple, Rectangle, Sprite, Texture } from '/vendor/pixi.mjs';
+import { BufferImageSource, CanvasSource, Rectangle, Sprite, Texture } from '/vendor/pixi.mjs';
 import { vehicles } from '../vehicles.mjs';
 import { clamp, colors, fade, graphics, group, icon, money, panel, target, text } from './primitives.mjs';
 import { car } from './world-view.mjs';
@@ -8,20 +8,18 @@ const bends = [
   [.205, .067], [.11, .118], [.495, .42], [.585, .548], [.83, .763], [.76, .865, .791], [.68, .881, .809], [.36, .935],
 ];
 const tabs = [['garage', 'Garage'], ['shop', 'Shop'], ['daily', 'Daily Missions'], ['home', 'Story']];
-const mapEdgeFraction = .15;
-const modulo = (value, period) => ((value % period) + period) % period;
-
-function routePoints(points, period, left, width) {
-  const tile = points.map(({ x, y }) => ({ x: left + x * width, y }));
-  const before = { ...tile.at(-1), y: tile.at(-1).y - period };
-  const end = { ...tile[0], y: period };
-  const after = { ...tile[1], y: tile[1].y + period };
-  const all = [before, ...tile, end, after];
+const mapFeatherFraction = .12;
+const backgroundTextures = new WeakMap();
+function routePoints(points, left, width) {
+  const path = points.map(({ x, y }) => ({ x: left + x * width, y }));
   const segments = [];
   const dots = [];
   let length = 0;
-  for (let i = 1; i < all.length - 2; i += 1) {
-    const [prior, a, b, next] = all.slice(i - 1, i + 3);
+  for (let i = 0; i < path.length - 1; i += 1) {
+    const a = path[i];
+    const b = path[i + 1];
+    const prior = path[i - 1] ?? a;
+    const next = path[i + 2] ?? b;
     const distance = Math.hypot(b.x - a.x, b.y - a.y);
     const start = distance / (3 * Math.hypot(b.x - prior.x, b.y - prior.y));
     const finish = distance / (3 * Math.hypot(next.x - a.x, next.y - a.y));
@@ -41,7 +39,7 @@ function routePoints(points, period, left, width) {
       length = nextLength;
     }
   }
-  const interval = length / Math.round(length / 12);
+  const interval = length / Math.max(1, Math.round(length / 12));
   let next = 0;
   const marks = [];
   for (const dot of dots) {
@@ -51,48 +49,66 @@ function routePoints(points, period, left, width) {
       next += interval;
     }
   }
-  return { x: tile[0].x, segments, marks };
+  return { start: path[0], segments, marks };
 }
 
-function drawRoute(parent, curve, w, y) {
-  const track = graphics(parent, 'route-road').moveTo(curve.x, y);
-  for (const { p, q, b } of curve.segments) track.bezierCurveTo(p.x, p.y + y, q.x, q.y + y, b.x, b.y + y);
+function drawRoute(parent, curve, w) {
+  const track = graphics(parent, 'route-road').moveTo(curve.start.x, curve.start.y);
+  for (const { p, q, b } of curve.segments) track.bezierCurveTo(p.x, p.y, q.x, q.y, b.x, b.y);
   track.stroke({ color: 0x10182e, width: clamp(w * .035, 11, 20), cap: 'round' });
   const dots = graphics(parent, 'route-dots');
-  for (const [x, dotY] of curve.marks) dots.circle(x, dotY + y, clamp(w * .005, 2, 3.1));
+  for (const [x, y] of curve.marks) dots.circle(x, y, clamp(w * .005, 2, 3.1));
   dots.fill(0x92f7eb);
 }
 
-function stretchMapEdges(parent, texture, { left, w, width }, inset, { at, height, from, end, alpha }, mirrored) {
-  const fraction = inset / texture.frame.width;
-  const edgeWidth = fraction * w;
-  const steps = 16;
-  const vertices = [];
-  const uvs = [];
-  const indices = [];
-  // Keep the source scale at the central joins and ease the extra width into the outer margins.
-  for (const side of [-1, 1]) {
-    for (let step = 0; step <= steps; step += 1) {
-      const t = step / steps;
-      const distance = edgeWidth * t + left * t ** 3;
-      const centerEdge = side === -1 ? left + edgeWidth : width - left - edgeWidth;
-      const x = centerEdge + side * distance;
-      const u = side === -1 ? fraction * (1 - t) : 1 - fraction * (1 - t);
-      const tx = mirrored ? 1 - u : u;
-      const index = vertices.length / 2;
-      vertices.push(x, at, x, at + height);
-      uvs.push(tx, from / texture.frame.height, tx, end / texture.frame.height);
-      if (step) indices.push(index - 2, index, index - 1, index - 1, index, index + 1);
-    }
+function backgroundTexture(map) {
+  const cached = backgroundTextures.get(map);
+  if (cached) return cached;
+
+  // Downsample the artwork once. Scrolling then draws a single ordinary Pixi sprite.
+  const width = 256;
+  const height = Math.round(width * map.height / map.width);
+  const canvas = new OffscreenCanvas(width, height);
+  const image = canvas.getContext('2d', { alpha: false });
+  image.fillStyle = '#152934';
+  image.fillRect(0, 0, width, height);
+  image.filter = 'blur(1.8px) saturate(.52)';
+  const overscan = 1.3;
+  image.drawImage(map.source.resource, width * (1 - overscan) / 2, height * (1 - overscan) / 2,
+    width * overscan, height * overscan);
+  const texture = new Texture({ source: new CanvasSource({ resource: canvas }) });
+  backgroundTextures.set(map, texture);
+  return texture;
+}
+
+function storyBackground(parent, map, { width, height }) {
+  const background = parent.addChild(new Sprite({
+    texture: backgroundTexture(map), label: 'story-background', tint: 0x4c6972, eventMode: 'none',
+  }));
+  background.anchor.set(.5);
+  background.position.set(width / 2, height / 2);
+  const scale = Math.max(width / map.width, height / map.height);
+  background.width = map.width * scale;
+  background.height = map.height * scale;
+}
+
+function featherMap(parent, art, { left, w, height }) {
+  // A stationary alpha mask feathers both sides while the art scrolls beneath it.
+  const feather = Math.min(left / w, mapFeatherFraction);
+  const samples = 1024;
+  const data = new Uint8Array(samples * 4).fill(255);
+  for (let i = 0; i < samples; i += 1) {
+    const distance = Math.min(i, samples - 1 - i) / (samples - 1);
+    const t = Math.min(1, distance / feather);
+    data[i * 4 + 3] = Math.round(255 * t * t * (3 - 2 * t));
   }
-  const mesh = new MeshSimple({
-    texture, vertices: new Float32Array(vertices), uvs: new Float32Array(uvs),
-    indices: new Uint32Array(indices), alpha, eventMode: 'none',
-  });
-  mesh.autoUpdate = false;
-  const { geometry } = mesh;
-  mesh.once('destroyed', () => geometry.destroy());
-  parent.addChild(mesh);
+  const source = new BufferImageSource({ resource: data, width: samples, height: 1, format: 'rgba8unorm' });
+  const texture = new Texture({ source });
+  const mask = parent.addChild(new Sprite({ texture, label: 'story-map-mask', x: left, eventMode: 'none' }));
+  mask.width = w;
+  mask.height = height;
+  mask.once('destroyed', () => texture.destroy(true));
+  art.setMask({ mask, channel: 'alpha' });
 }
 
 function sceneStrip(parent, texture, view, band, overlap, mirrored) {
@@ -101,8 +117,9 @@ function sceneStrip(parent, texture, view, band, overlap, mirrored) {
   const slices = 18;
   const size = band + overlap;
   const original = texture.frame;
-  const inset = left ? Math.round(original.width * mapEdgeFraction) : 0;
-  const edgeWidth = w * inset / original.width;
+  const scale = size / original.height;
+  const artWidth = left ? original.width * scale : w;
+  const artLeft = left + (w - artWidth) / 2;
   const overlapPixels = Math.round(original.height * overlap / size);
   let previous = 0;
   for (let i = 0; i <= slices; i += 1) {
@@ -111,19 +128,20 @@ function sceneStrip(parent, texture, view, band, overlap, mirrored) {
     previous = end;
     const part = new Texture({
       source: texture.source,
-      frame: new Rectangle(original.x + inset, original.y + from, original.width - inset * 2, end - from),
+      frame: new Rectangle(original.x, original.y + from, original.width, end - from),
     });
     strip.once('destroyed', () => part.destroy(false));
-    const at = size * from / original.height;
-    const height = size * (end - from) / original.height;
     const alpha = i === slices ? 1 : (i + .5) / slices;
-    if (inset) stretchMapEdges(strip, texture, view, inset, { at, height, from, end, alpha }, mirrored);
     const sprite = strip.addChild(new Sprite({
       texture: part, label: i === slices ? 'map-tile' : 'palmera-bay-art', alpha, eventMode: 'none',
     }));
-    sprite.width = w - edgeWidth * 2;
-    sprite.height = height;
-    sprite.position.set(left + edgeWidth + (mirrored ? sprite.width : 0), at);
+    if (left) {
+      sprite.scale.set(scale);
+    } else {
+      sprite.width = w;
+      sprite.height = size * (end - from) / original.height;
+    }
+    sprite.position.set(artLeft + (mirrored ? artWidth : 0), size * from / original.height);
     if (mirrored) sprite.scale.x *= -1;
   }
   return strip;
@@ -191,26 +209,19 @@ function story(parent, textures, content, progress, view, controls, scroll) {
   const { width, height, left, w, header, navY } = view;
   const bands = Math.ceil(content.chapter.missions.length / stops.length);
   const band = Math.max(552, Math.round(w * 1.65), Math.ceil((height + 120) / bands));
-  const period = bands * band;
   const overlap = clamp(w * .20, 62, 112);
   const dragArea = target(parent, controls, {
     id: 'story-map', name: 'Scrollable chapter map', x: left + 4, y: header,
     w: w - 8, h: Math.max(1, navY - header), role: 'region',
   });
   dragArea.node.eventMode = 'none';
-  const backdrop = group(parent, 'city-art');
-  backdrop.eventMode = 'none';
-  if (left) {
-    const wing = (left + w * mapEdgeFraction) / width;
-    fade(parent, 0, 0, width, height, 0x091728, [[0, .78], [wing * .47, .44], [wing * .76, .11], [wing, 0],
-      [1 - wing, 0], [1 - wing * .76, .11], [1 - wing * .47, .44], [1, .78]], true);
-  }
+  if (left) storyBackground(parent, textures.map, view);
+  const art = group(parent, 'city-art');
+  art.eventMode = 'none';
+  if (left) featherMap(parent, art, view);
   const track = group(parent, 'winding-route');
   track.eventMode = 'none';
   const pins = group(parent, 'story-pins');
-  for (let strip = -2; strip <= bands * 2; strip += 1) {
-    sceneStrip(backdrop, textures.map, view, band, overlap, modulo(strip, bands) % 2 === 1).y = strip * band;
-  }
   const entries = content.chapter.missions.map((mission, index) => {
     const strip = bands - 1 - Math.floor(index / stops.length);
     const [x, y] = stops[index % stops.length];
@@ -219,19 +230,29 @@ function story(parent, textures, content, progress, view, controls, scroll) {
   });
   const points = entries.map(entry => ({ x: entry.x, y: entry.y, order: entry.y / band }));
   const district = { x: .29, y: .064 * band, order: .064 };
+  const first = points[0];
+  const last = content.fixture ? points.at(-1) : district;
+  const lowerPinY = Math.max(header + 31, Math.min(navY - 36, height * .71));
+  const upperPinY = Math.min(navY - 40, Math.max(header + 44, height * .29));
+  const min = Math.min(last.y - upperPinY, first.y - lowerPinY);
+  const max = first.y - lowerPinY;
+  // The overlapping art can extend to the viewport edges while the route ends at its pins.
+  for (let strip = Math.floor(min / band); strip <= Math.floor((max + height) / band); strip += 1) {
+    sceneStrip(art, textures.map, view, band, overlap, strip % 2 !== 0).y = strip * band;
+  }
   if (!content.fixture) points.push(district);
   for (let b = 0; b < bands; b += 1) {
     points.push({ x: .37, y: b * band, order: b });
     for (const [x, y, order = y] of bends) points.push({ x: b % 2 ? 1 - x : x, y: (b + y) * band, order: b + order });
   }
-  points.sort((a, b) => a.order - b.order);
-  const curve = routePoints(points, period, left, w);
-  for (let repeat = -1; repeat <= 1; repeat += 1) drawRoute(track, curve, w, repeat * period);
+  const route = points.filter(point => point.order >= last.order && point.order <= first.order);
+  route.sort((a, b) => a.order - b.order);
+  drawRoute(track, routePoints(route, left, w), w);
   const displays = entries.map(entry => {
     const reveal = () => {
       const index = entry.index;
       const backtrack = index > 0 ? entries[index - 1].y - entry.y : 0;
-      const y = Math.max(header + 25, Math.min(navY - 32 - backtrack, height * .71));
+      const y = Math.max(header + 31, Math.min(lowerPinY, navY - 36 - backtrack));
       position(entry.y - y);
     };
     const { control, radius } = missionPin(pins, controls, entry, left + entry.x * w, w, left, reveal);
@@ -247,16 +268,17 @@ function story(parent, textures, content, progress, view, controls, scroll) {
   fade(parent, 0, 0, width, Math.min(214, height * .31), 0x081223, [[0, 1], [.42, .88], [1, 0]]);
   fade(parent, 0, navY - 68, width, height - navY + 68, 0x071222, [[0, 0], [.53, .81], [1, 1]]);
 
-  function position(next) {
-    scroll.offset = modulo(next, period);
-    scroll.period = period;
-    backdrop.y = track.y = -scroll.offset;
-    for (const strip of backdrop.children) {
+  function position(next, initial = false) {
+    const offset = clamp(next, min, max);
+    if (!initial && offset === scroll.offset) return false;
+    scroll.offset = offset;
+    art.y = track.y = -scroll.offset;
+    for (const strip of art.children) {
       const y = strip.y - scroll.offset;
       strip.visible = y <= height && y + band + overlap >= 0;
     }
     for (const { node, y, radius, control } of displays) {
-      const screenY = y + Math.round((scroll.offset + height / 2 - y) / period) * period - scroll.offset;
+      const screenY = y - scroll.offset;
       const opacity = clamp(Math.min((screenY - header + 23) / 37, (navY + 10 - screenY) / 33), 0, 1);
       node.y = screenY - radius;
       node.alpha = opacity;
@@ -265,11 +287,18 @@ function story(parent, textures, content, progress, view, controls, scroll) {
         node.eventMode = screenY >= header + 2 && screenY <= navY - 2 ? 'static' : 'none';
       }
     }
+    return true;
   }
 
-  const oldPeriod = scroll.period;
-  position(oldPeriod ? scroll.offset / oldPeriod * period : 0);
-  return { position, missions: displays };
+  const old = { ...scroll };
+  let offset = max;
+  if (old.min !== null && old.offset !== old.max) {
+    const fraction = (old.offset - old.min) / (old.max - old.min);
+    offset = old.min === min && old.max === max ? old.offset : min + fraction * (max - min);
+  }
+  Object.assign(scroll, { min, max });
+  position(offset, true);
+  return { position };
 }
 
 function navigation(parent, phase, { left, w, navY }, controls) {

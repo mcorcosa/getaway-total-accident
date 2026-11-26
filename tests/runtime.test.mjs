@@ -7,7 +7,7 @@ import { SAVE_KEY, newProgress, progressStore } from '../src/save.mjs';
 import { validateChapter, validateChapterOneProgression, validateWorld } from '../src/schema.mjs';
 import { NEUTRAL_INPUT, startDrive, stepDrive } from '../src/simulation.mjs';
 import { chooseVehicle, eligibleVehicles, STARTER_VEHICLE_ID, vehicles } from '../src/vehicles.mjs';
-import { makeMap, onRoad, roadLine } from '../src/world.mjs';
+import { inside, makeMap, onRoad, roadLine } from '../src/world.mjs';
 
 const fixture = { chapter: fixtureChapter, world: fixtureWorld };
 const [first, second, third] = fixtureChapter.missions;
@@ -15,6 +15,51 @@ const vehicle = vehicles[STARTER_VEHICLE_ID];
 const map = makeMap(fixtureWorld, first.mapPieceIds);
 const brake = { ...NEUTRAL_INPUT, brake: true };
 const left = { ...NEUTRAL_INPUT, left: true };
+
+test('neighboring pavement adds scenery and closure markings without adding a patrol or driving route', () => {
+  const piece = (id, road, navNodes = [], navLinks = []) => ({ id, bounds: road, roads: [road], navNodes, navLinks });
+  const approach = piece('approach', { x: 40, y: 0, width: 40, height: 102 }, [{ id: 'start', x: 60, y: 15 }]);
+  const extension = piece('extension', { x: 40, y: 90, width: 40, height: 100 }, [{ id: 'finish', x: 60, y: 170 }],
+    [['start', 'finish']]);
+  const cross = piece('cross', { x: 0, y: 80, width: 160, height: 30 }, [{ id: 'side', x: 135, y: 95 }],
+    [['start', 'side']]);
+  const inactiveObstacles = [
+    { x: 50, y: 102, width: 10, height: 7 },
+    { x: 135, y: 102, width: 10, height: 7 },
+  ];
+  cross.obstacles = inactiveObstacles;
+  const exit = piece('exit', { x: 65, y: 80, width: 95, height: 15 });
+  const remote = piece('remote', { x: 0, y: 900, width: 160, height: 30 });
+  const streetMap = { pieces: [approach, extension, cross, exit, remote] };
+  const selected = makeMap(streetMap, ['approach', 'extension', 'exit']);
+  assert.deepEqual(selected.pieces, [approach, extension, exit]);
+  assert.deepEqual(selected.scenery.surroundings, cross.roads);
+  assert.deepEqual(selected.scenery.roads, [...approach.roads, ...extension.roads, ...cross.roads, ...exit.roads]);
+  assert.deepEqual(selected.scenery.obstacles, [inactiveObstacles[1]]);
+  assert.deepEqual(selected.obstacles, []);
+  assert.deepEqual(selected.nodes.map(node => node.id), ['start', 'finish']);
+  assert.deepEqual([...selected.neighbors.get('start')], ['finish']);
+
+  const intersection = { x: 60, y: 100 };
+  const closed = { x: 135, y: 100 };
+  assert.equal(roadLine(selected, approach.navNodes[0], extension.navNodes[0]), true);
+  assert.equal(onRoad(selected, closed), false);
+  assert.equal(roadLine(selected, intersection, closed), false);
+  assert.equal(roadLine(selected, { x: 60, y: 88 }, { x: 135, y: 88 }), true);
+  assert.deepEqual(selected.scenery.closures, [
+    { x: 28, y: 80, width: 12, height: 30, axis: 'x' },
+    { x: 80, y: 95, width: 12, height: 15, axis: 'x' },
+  ]);
+  for (const closure of selected.scenery.closures) {
+    const center = { x: closure.x + closure.width / 2, y: closure.y + closure.height / 2 };
+    assert.ok(inside(cross.roads[0], center));
+    assert.equal(onRoad(selected, center), false);
+  }
+  const opened = makeMap(streetMap, ['approach', 'extension', 'cross', 'exit']);
+  assert.equal(roadLine(opened, intersection, closed), true);
+  assert.deepEqual(opened.scenery.closures, []);
+  assert.ok(opened.neighbors.get('start').has('side'));
+});
 
 function memoryStorage() {
   const records = new Map();

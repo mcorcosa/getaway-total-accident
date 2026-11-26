@@ -63,7 +63,7 @@ export function statusScene(app, title, detail, fixtureLink) {
 export function gameUI(app, content, textures, game, effects) {
   const { stage, canvas } = app;
   const { state } = game;
-  const scroll = { offset: 0, period: 0 };
+  const scroll = { offset: 0, min: null, max: null };
   const swipe = new Set();
   let drag;
   let previous;
@@ -203,7 +203,8 @@ export function gameUI(app, content, textures, game, effects) {
       wasCleared = false;
     }
     if (!controls.some(item => item.id === focus)) focus = null;
-    if (focus) focusOn(focus, true);
+    // Rebuilding Story on resize should keep the chosen viewport, even if its focused pin is offscreen.
+    if (focus) focusOn(focus, !preserve || !map);
     previous = phase;
     if (phase === 'driving' || dialogs.has(phase)) focusCanvas();
     draw(effects.input());
@@ -224,9 +225,8 @@ export function gameUI(app, content, textures, game, effects) {
     });
   }
 
-  function shiftMap(delta) {
-    if (!map) return;
-    map.position(scroll.offset + delta);
+  function scrollMapTo(offset) {
+    if (!map?.position(offset)) return;
     drawFocus();
     effects.invalidate();
   }
@@ -267,10 +267,15 @@ export function gameUI(app, content, textures, game, effects) {
       focusOn(tabs[(i + (code === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length].id);
       return true;
     }
-    if (map && (!control || control.role === 'region')) {
-      const deltas = { ArrowUp: -65, ArrowDown: 65, PageUp: -app.screen.height * .7, PageDown: app.screen.height * .7 };
-      if (deltas[code]) {
-        shiftMap(deltas[code]);
+    if (map) {
+      const { offset } = scroll;
+      const page = app.screen.height * .7;
+      const destinations = {
+        ArrowUp: offset - 65, ArrowDown: offset + 65, PageUp: offset - page, PageDown: offset + page,
+        Home: scroll.min, End: scroll.max,
+      };
+      if (Object.hasOwn(destinations, code)) {
+        scrollMapTo(destinations[code]);
         return true;
       }
     }
@@ -294,7 +299,7 @@ export function gameUI(app, content, textures, game, effects) {
     if (!drag || drag.id !== e.pointerId) return;
     if (swipe.has(e.pointerId) || Math.abs(e.global.y - drag.start) >= 7) {
       swipe.add(e.pointerId);
-      shiftMap(drag.last - e.global.y);
+      scrollMapTo(scroll.offset + (drag.last - e.global.y));
       drag.last = e.global.y;
     }
   });
@@ -307,7 +312,7 @@ export function gameUI(app, content, textures, game, effects) {
     if (!map || event.ctrlKey) return;
     event.preventDefault();
     const multiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? app.screen.height : 1;
-    shiftMap(event.deltaY * multiplier);
+    scrollMapTo(scroll.offset + event.deltaY * multiplier);
   }, { passive: false });
   canvas.addEventListener('focus', () => { if (focusRing) drawFocus(); effects.invalidate(); });
   canvas.addEventListener('blur', () => { if (focusRing) drawFocus(); effects.invalidate(); });

@@ -26,6 +26,10 @@ Palmera Bay is a fictional South Florida city. The Canal Ward has low bridges, m
 
 Author one shared map in reusable pieces. Each mission uses the portions it needs. Grow the map and plan its geography as new missions require space or connections. The district themes guide future additions. District layouts, map dimensions and topology, the first extension, and technical architecture remain open.
 
+**Asset reuse.** Build new missions from a shared library of road and terrain pieces, vehicle visuals, and props. Use reusable sprites, shared tiles, or cached procedural assets for stable visuals, and share them across missions. Keep dynamic effects such as vehicle lights separate where useful.
+
+**Current Pixi runtime.** Missions share authored world pieces, cached generated textures for roads, roofs, paving, water, light, and palms, and shared parametric drawing for roads, buildings, cars, lamps, and barricades. The [staged Canal Ward gameplay library](docs/canal-ward-gameplay-assets.md) contains separate PNG tiles and sprites with usage notes and their original prompts.
+
 The player drives as Ray. Nina finds and presents the jobs. Their old crew cut them out of a score. Nina wants enough money for them to leave town together. Ray wants to take one job big enough that the old crew hears about it. They both enjoy what they do, and either one can be the voice of caution depending on the job. Their disagreement becomes the player's choice at the final safehouse.
 
 Before each job, Nina sets up the mission in one postcard using a short speech bubble. A square teaching inset appears only when the job introduces a new objective or mechanic. After the job, the result postcard reacts to what happened, including whether they caught the ferry, took the road exit, or got busted. During a chase, save the radio for a line that changes what the player should do.
@@ -79,23 +83,23 @@ Open gameplay rules include the catch win condition, race placement and circuit 
 
 The owner approved this 21-mission sequence on 26 November 2026 for the first playable Chapter 1 rebuild in Canal Ward. Mission names are working labels. All main jobs are untimed.
 
-Practice changes routes, approaches, or marker placements within the rules just learned. Keep the same patrol starting gap, speed, and capture rule across C1-14 to C1-18 and reuse that setup in C1-21. Street and landmark labels describe spatial needs. Grow the shared map as missions require it, and use placeholder story until gameplay and rules are settled.
+Practice changes routes, approaches, or marker placements within the rules just learned. Keep the same patrol starting gap, speed, and capture rule across C1-14 to C1-18 and reuse that setup in C1-21. Street and landmark labels describe spatial needs. Grow the shared map as missions require it, and use placeholder story until gameplay and rules are settled. On C1-01 to C1-03, compact views can begin with a directional target cue that gives way to the world marker when it comes into view. Show nearby connected streets and houses or roofs beyond the mission’s drivable footprint. Mark closed streets clearly with barricades. Collision checks and patrol routing stay within the active road network.
 
 Playtesting will tune exact placements, patrol values, bonus balancing, and test payouts. Later chapters remain open.
 
 #### Reach the destination
 
-- **C1-01 Reach the Marker.** Start aligned with a visible finish marker on a straight street. Automatic acceleration alone carries Ray into it to clear the job. The route is straight and patrol-free.
-- **C1-02 Same Goal, New Street.** Repeat the short straight-to-marker drive on another street.
-- **C1-03 Down the Block.** Repeat the straight drive with the target farther down the block.
+- **C1-01 Reach the Marker.** Start aligned with the finish marker on a longer straight street. Automatic acceleration alone carries Ray into it to clear the job. The route is patrol-free.
+- **C1-02 Same Goal, New Street.** Repeat the straight drive on another street, with more room to get used to the car before reaching the marker.
+- **C1-03 Down the Block.** Repeat the longer straight drive with the target farther down the block.
 
 #### Learn steering and braking
 
-- **C1-04 First Bend.** Follow a wide bend to a marked garage. Practice steering and braking with baseline grip and collision damage.
-- **C1-05 Left Turn.** Reach the garage via a broad left bend.
-- **C1-06 Right Turn.** Reach the garage via a broad right bend.
+- **C1-04 First Bend.** Drive a longer approach before the same wide bend to the marked garage. Practice steering and braking with baseline grip and collision damage.
+- **C1-05 Left Turn.** Take a longer approach to the same broad left bend to reach the garage.
+- **C1-06 Right Turn.** Take a longer approach to the same broad right bend to reach the garage.
 - **C1-07 Two Streets.** Choose either of two wide streets to reach the garage.
-- **C1-08 Other Approach.** Reach a familiar garage from the opposite end of the block.
+- **C1-08 Other Approach.** Reach the familiar garage from the opposite end of the block on a longer approach from the south.
 
 #### Collect one package and escape
 
@@ -138,7 +142,7 @@ The working finale keeps the choice to bank and leave town or risk the haul on R
 
 **Story is Home.** Players scroll through the chapters and city map to find and replay missions. Show Nina and Ray's current chapter, the bank balance, and the next district's cost when relevant. Group missions by district in story order. Cleared missions remain visible with a short objective, normal payout, best banked payout, **Replay**, and a **Recap** of Nina and Ray's exchange. The next available job offers **Continue**. Locked jobs show which job comes before them. On return after a clear, select the next available job.
 
-**Story map.** Use the full-bleed illustrated Palmera Bay map with a winding dotted path, numbered mission nodes, a district unlock on the path, and a bottom menu. The same map content must scroll vertically and join seamlessly at the loop. The approved reference is screenshot 2 in the owner’s 26 November 2026 correction in the Art Director chat, message `01a21712-9f74-7eb0-84c6-6776e61d6062`.
+**Story map.** Use the full-bleed illustrated Palmera Bay map with a winding dotted path, numbered mission nodes, a district unlock on the path, and a bottom menu. Downward scrolling stops at the first mission, Level 1. Higher missions and districts remain reachable by scrolling in the other direction. Keep the artwork joins seamless between sections. The approved reference is screenshot 2 in the owner’s 26 November 2026 correction in the Art Director chat, message `01a21712-9f74-7eb0-84c6-6776e61d6062`.
 
 **Story map and menus implementation.** On 26 November 2026 the owner reconfirmed the migrated Story map reference and directed the PM to bring the Story map and menus into line with the applicable mockups. Both instructions are in the restored Art Director chat `01a2177b-4f09-7483-90bc-3687ed8c70b1`, in messages `01a2178e-b46e-7883-b73c-d1de6315c816` and `01a21797-e38f-75e3-aed2-b5a550050e8c`. The earlier browser review of the Story/Home map and shared bottom navigation established visual fidelity for the HTML-based snapshot. The approved mockup and reviewed visuals guide the Pixi implementation. [Confirmed Story map reference](assets/references/story-map-approved.png) · [Browser review evidence](docs/chapter-1-build.md#story-map-and-shared-navigation-review)
 

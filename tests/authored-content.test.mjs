@@ -5,8 +5,8 @@ import { loadContent } from '../src/content-loader.mjs';
 import { createGame } from '../src/game-state.mjs';
 import { driveFrame } from '../src/renderer.mjs';
 import { progressStore } from '../src/save.mjs';
-import { NEUTRAL_INPUT } from '../src/simulation.mjs';
-import { distance } from '../src/world.mjs';
+import { NEUTRAL_INPUT, STEP } from '../src/simulation.mjs';
+import { distance, makeMap, roadLine } from '../src/world.mjs';
 
 const authoredContent = () => loadContent({
   fetcher: async url => new Response(await readFile(url)),
@@ -80,25 +80,52 @@ test('the authored chapter loads through the standard loader and all three openi
   const storage = { getItem: () => null, setItem: () => {} };
   const store = progressStore(content.chapter, { getStorage: () => storage });
   const game = createGame(content, store);
+  const durations = [];
   let bank = 0;
   for (const mission of content.chapter.missions.slice(0, 3)) {
     assert.equal(game.dispatch('open', mission.id), true);
     assert.equal(game.dispatch('start'), true, `${mission.id} does not have a usable starter car`);
     const target = mission.objective.destination;
-    const { view, zoom } = driveFrame(320, 568, mission.spawn, target, { hudBottom: 112, footerTop: 483 });
-    const targetX = (target.x - view.x) * zoom;
-    const targetY = (target.y - view.y) * zoom;
-    const ring = target.radius * zoom;
-    assert.ok(targetX > 24 && targetX < 296 && targetY > 125 && targetY < 470,
-      `${mission.id} starts with its target outside the unobstructed compact playfield`);
-    assert.ok(targetY - ring > 112 && targetY + ring < 483,
-      `${mission.id} starts with its target ring under a compact overlay`);
-    for (let i = 0; i < 1_800 && game.state.phase === 'driving'; i += 1) game.tick(NEUTRAL_INPUT);
+    const { drive } = game.state.run;
+    assert.ok(roadLine(drive.map, mission.spawn, target), `${mission.id} has a clear path toward the target`);
+    const sizes = [[320, 568], [390, 600]];
+    const reachedWorldMarker = new Set();
+    let steps = 0;
+    while (steps < 1_800 && game.state.phase === 'driving') {
+      for (const [width, height] of sizes) {
+        const { view, zoom, safe } = driveFrame(width, height, drive.player, target, { hudBottom: 100, footerTop: height - 60 });
+        const x = (target.x - view.x) * zoom;
+        const y = (target.y - view.y) * zoom;
+        if (x >= safe.left - .01 && x <= safe.right + .01 && y >= safe.top - .01 && y <= safe.bottom + .01) {
+          reachedWorldMarker.add(width);
+        }
+      }
+      game.tick(NEUTRAL_INPUT);
+      steps += 1;
+    }
+    assert.equal(reachedWorldMarker.size, sizes.length, `${mission.id} shows the on-road target before completion`);
     assert.equal(game.state.phase, 'success', `${mission.id} did not finish with neutral input`);
     assert.equal(game.state.run.damage, game.state.run.drive.vehicle.maxDamage);
+    durations.push(steps * STEP);
     game.dispatch('bank');
     bank += mission.payout;
     assert.equal(game.state.progress.bank, bank);
+  }
+  assert.ok(durations.every(seconds => seconds >= 2.5 && seconds <= 4), `Opening drive times ${durations.join(', ')}`);
+  assert.equal(durations[2], Math.max(...durations), 'C1-03 is the longest opening drive');
+});
+
+test('the authored Canal Ward shows closed cross streets without covering active pavement', async () => {
+  const { chapter, world } = await authoredContent();
+  for (const [index, mission] of chapter.missions.entries()) {
+    const map = makeMap(world, mission.mapPieceIds);
+    if (index < 4 || index === 7) {
+      assert.ok(map.scenery.closures.some(closure => Math.abs(closure.y - mission.spawn.y) < 150), mission.id);
+    }
+    for (const { x, y, width, height } of map.scenery.closures) {
+      assert.ok(map.roads.every(road => x >= road.x + road.width || x + width <= road.x ||
+        y >= road.y + road.height || y + height <= road.y), `${mission.id} has a barricade on open pavement at ${x},${y}`);
+    }
   }
 });
 

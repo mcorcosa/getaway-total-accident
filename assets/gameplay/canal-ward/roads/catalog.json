@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "assets": [
+    {
+      "id": "asphalt-wet-charcoal",
+      "category": "road-surface",
+      "file": "roads/asphalt-wet-charcoal.png",
+      "widthPx": 256,
+      "heightPx": 256,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 64.0,
+        "height": 64.0
+      },
+      "pivotPx": {
+        "x": 0,
+        "y": 0
+      },
+      "sourceOrientation": {
+        "view": "top-down"
+      },
+      "repeatAxes": [
+        "x",
+        "y"
+      ],
+      "sha256": "3b2a1a7c5f70695ad56381a6b021540b82b98a714cc7a92933815d7b841b98bd"
+    },
+    {
+      "id": "sidewalk-stone-pavers",
+      "category": "paving-surface",
+      "file": "roads/sidewalk-stone-pavers.png",
+      "widthPx": 192,
+      "heightPx": 192,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 48.0,
+        "height": 48.0
+      },
+      "pivotPx": {
+        "x": 0,
+        "y": 0
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "jointAxes": [
+          "x",
+          "y"
+        ]
+      },
+      "repeatAxes": [
+        "x",
+        "y"
+      ],
+      "sha256": "ba9e97f9698c1b7cd531dd3b97b8a060c62eb71aaddbcd06ac9f57d938a8c575"
+    },
+    {
+      "id": "curb-stone-straight",
+      "category": "curb",
+      "file": "roads/curb-stone-straight.png",
+      "widthPx": 256,
+      "heightPx": 11,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 64.0,
+        "height": 2.75
+      },
+      "pivotPx": {
+        "x": 0,
+        "y": 0
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "longAxis": "+x",
+        "pavingEdge": "north",
+        "roadEdge": "south"
+      },
+      "repeatAxes": [
+        "x"
+      ],
+      "sha256": "7e63f576b86332f0090ada1c6127a48fc5899b9ae61f51f118b10e1cf3f4242d"
+    }
+  ]
+}

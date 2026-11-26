@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdtemp, realpath } from 'node:fs/promises';
+import { mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, test } from 'node:test';
@@ -13,6 +13,7 @@ const mainPayout = 100;
 const bonusPayout = 50;
 const pendingMain = { missionId: 'C1-01', vehicleId: 'starter-coupe', haul: mainPayout, damage: 4 };
 const neutral = { left: false, right: false, brake: false };
+const chapterUrl = new URL('../../src/content/chapter1.json', import.meta.url);
 const mission = id => `mission:${id}`;
 const action = id => `card:${id}`;
 const money = value => new Intl.NumberFormat('en-US', {
@@ -23,8 +24,10 @@ let browser;
 let server;
 let origin;
 let evidence;
+let chapter;
 
 before(async () => {
+  chapter = JSON.parse(await readFile(chapterUrl, 'utf8'));
   evidence = await mkdtemp(join(await realpath(tmpdir()), 'gtc-pixi-browser-evidence-'));
   console.log(`Screenshots: ${evidence}`);
   server = gameServer();
@@ -216,23 +219,85 @@ async function pixelSamples(page, image, request) {
         return { join, joinChange, nearbyMean: changes.reduce((sum, value) => sum + value, 0) / changes.length };
       });
     }
+    if (kind === 'backdrop-coverage') {
+      return request.wings.map(({ x, width }) => {
+        const pixels = samples.getImageData(x, y, width, request.height).data;
+        const middle = request.middle - y;
+        const low = [Infinity, Infinity];
+        const high = [0, 0];
+        let midline = 0;
+        for (let row = 0; row < request.height; row += 1) {
+          const half = Number(row >= middle);
+          for (let col = 0; col < width; col += 1) {
+            const at = (row * width + col) * 4;
+            const level = pixels[at] + pixels[at + 1] + pixels[at + 2];
+            low[half] = Math.min(low[half], level);
+            high[half] = Math.max(high[half], level);
+            if (row === middle) {
+              for (let channel = 0; channel < 3; channel += 1) {
+                midline += Math.abs(pixels[at + channel] - pixels[at - width * 4 + channel]);
+              }
+            }
+          }
+        }
+        return { range: high.map((value, half) => value - low[half]), midline: midline / (width * 3) };
+      });
+    }
     if (kind === 'shift') {
       const next = await decode(request.next);
-      const width = samples.canvas.width;
-      const first = samples.getImageData(0, y, width, request.height).data;
-      const second = next.getImageData(0, y - request.dy, width, request.height).data;
+      const width = request.width ?? samples.canvas.width;
+      const first = samples.getImageData(x ?? 0, y, width, request.height).data;
+      const second = next.getImageData(x ?? 0, y - request.dy, width, request.height).data;
       let different = 0;
+      let changed = 0;
+      let max = 0;
       let channels = 0;
       let absolute = 0;
       for (let offset = 0; offset < first.length; offset += 4) {
         for (let component = 0; component < 3; component += 1) {
           const diff = Math.abs(first[offset + component] - second[offset + component]);
           if (diff > 4) different += 1;
+          if (diff > 0) changed += 1;
+          max = Math.max(max, diff);
           absolute += diff;
           channels += 1;
         }
       }
-      return { mismatch: different / channels, mean: absolute / channels };
+      return { mismatch: different / channels, mean: absolute / channels, changed: changed / channels, max };
+    }
+    if (kind === 'neighborhood') {
+      const { width, height, closure } = request;
+      const pixels = samples.getImageData(x, y, width, height).data;
+      let buildings = 0;
+      for (let i = 0; i < pixels.length; i += 4) {
+        const red = pixels[i];
+        const green = pixels[i + 1];
+        const blue = pixels[i + 2];
+        const slateRoof = green >= 76 && green <= 122 && green - red >= 12 && blue - green >= 8 && blue - green <= 19;
+        const warmRoof = red >= 95 && red <= 153 && red - green >= 10 && green >= 61 && green - blue <= 25 && blue >= 52;
+        if (slateRoof || warmRoof) buildings += 1;
+      }
+      const upright = closure.height > closure.width;
+      const centerX = Math.round(closure.x + closure.width / 2);
+      const centerY = Math.round(closure.y + closure.height / 2);
+      const vergeX = Math.max(0, centerX - (upright ? 32 : 12));
+      const vergeY = Math.max(y, centerY - (upright ? 12 : 32));
+      const pavement = samples.getImageData(vergeX, vergeY, Math.min(upright ? 64 : 24, width - vergeX),
+        Math.min(upright ? 24 : 64, y + height - vergeY)).data;
+      let streets = 0;
+      for (let i = 0; i < pavement.length; i += 4) {
+        const red = pavement[i];
+        const green = pavement[i + 1];
+        const blue = pavement[i + 2];
+        if (red >= 32 && red <= 43 && green >= 44 && green <= 55 && green - red >= 9 &&
+            green - red <= 15 && blue - green >= 8 && blue - green <= 13) streets += 1;
+      }
+      const stripes = samples.getImageData(closure.x, closure.y, closure.width, closure.height).data;
+      let barricade = 0;
+      for (let i = 0; i < stripes.length; i += 4) {
+        if (stripes[i] > 210 && stripes[i + 1] >= 145 && stripes[i + 2] < 130) barricade += 1;
+      }
+      return { buildings, streets, barricade };
     }
     const swatch = samples.getImageData(Math.round(x) - 9, Math.round(y) - 9, 19, 19).data;
     let match = 0;
@@ -251,6 +316,100 @@ function contact(page, kind, touchPoints = []) {
 
 async function holdPoint(page, id, contactId) {
   return { ...await page.center(`drive:${id}`), id: contactId };
+}
+
+async function holdBrake(page, mobile) {
+  if (mobile) await contact(page, 'touchStart', [await holdPoint(page, 'brake', 1)]);
+  else await page.key('ArrowDown', 'rawKeyDown');
+  await poll(async () => (await snapshot(page)).input.brake, 'a real brake input');
+  return () => mobile ? contact(page, 'touchEnd') : page.key('ArrowDown', 'keyUp');
+}
+
+function playfield(view) {
+  const hudBottom = Math.max(...verifyHud(view).map(item => item.bounds.y + item.bounds.height));
+  const footerTop = object(view, 'driving-controls').bounds.y;
+  return { hudBottom, footerTop };
+}
+
+function visibleObjective(view) {
+  const mark = object(view, 'world-destination');
+  const edge = object(view, 'edge-destination');
+  assert.notEqual(mark.visible, edge.visible, 'Show one destination indicator at a time');
+  const visible = mark.visible ? mark : edge;
+  const { y, height, x, width } = visible.bounds;
+  const { hudBottom, footerTop } = playfield(view);
+  assert.ok(y > hudBottom && y + height < footerTop && x >= 0 && x + width <= view.width,
+    `The destination overlaps an overlay or viewport edge: ${JSON.stringify({ visible, hudBottom, footerTop })}`);
+  return visible;
+}
+
+async function verifyNeighborhood(page, view) {
+  const { hudBottom, footerTop } = playfield(view);
+  assert.equal(object(view, 'context-streets').ancestor, 'world-geometry');
+  assert.equal(object(view, 'canal-buildings').ancestor, 'world-geometry');
+  const closure = view.scene.find(node => {
+    if (node.ancestor !== 'road-closures' || !node.visible) return false;
+    const { x, y, width, height } = node.bounds;
+    return x > 1 && x + width < view.width - 1 && y > hudBottom + 1 && y + height < footerTop - 1;
+  });
+  assert.ok(closure, 'The playable view contains an unobstructed barricade on a nearby closed street');
+  const integerBounds = Object.fromEntries(Object.entries(closure.bounds).map(([key, value]) => [key, Math.round(value)]));
+  const screen = await page.pixels();
+  const pixels = await pixelSamples(page, screen, { kind: 'neighborhood', x: 0, y: Math.ceil(hudBottom), width: view.width,
+    height: Math.floor(footerTop) - Math.ceil(hudBottom), closure: integerBounds });
+  assert.ok(pixels.buildings > 250 && pixels.streets > 250 && pixels.barricade > 20,
+    `The frame shows roofs, closed pavement and a striped barricade: ${JSON.stringify({ pixels, closure })}`);
+}
+
+async function captureFirstBend(page, name, mobile) {
+  const briefing = await openMission(page, 'C1-04');
+  assert.ok(object(briefing, 'teaching-inset').visible);
+  assert.ok(object(briefing, 'context-streets').visible);
+  await start(page);
+  let releaseBrake = await holdBrake(page, mobile);
+  await verifyNeighborhood(page, await snapshot(page));
+  await shot(page, `${name}-c1-04-closed-junction`);
+  await releaseBrake();
+  const approach = await poll(async () => {
+    const view = await snapshot(page);
+    const { player, objective } = view.drive;
+    return player.y - objective.destination.y < 48 && view;
+  }, 'approach the first bend under normal driving');
+  assert.ok(approach.drive.damage === 4);
+  releaseBrake = await holdBrake(page, mobile);
+  await poll(async () => (await snapshot(page)).drive.player.speed < 1, 'brake naturally at the first bend');
+  const corner = await snapshot(page);
+  assert.equal(corner.phase, 'driving');
+  assert.equal(corner.drive.damage, 4);
+  await shot(page, `${name}-c1-04-approach`);
+  const { player, objective } = corner.drive;
+  const turnTo = Math.atan2(objective.destination.y - player.y, objective.destination.x - player.x);
+  if (mobile) {
+    await contact(page, 'touchStart', [await holdPoint(page, 'brake', 1), await holdPoint(page, 'right', 2)]);
+  } else {
+    await page.key('ArrowRight', 'rawKeyDown');
+  }
+  await poll(async () => {
+    const view = await snapshot(page);
+    return view.input.brake && view.input.right && angleDifference(view.drive.player.heading, turnTo) < .10;
+  }, 'turn toward the open street using the real steering control');
+  if (!mobile) await page.key('ArrowRight', 'keyUp');
+  if (!mobile) {
+    await settle(page);
+    const first = await page.pixels();
+    await delay(550);
+    const second = await page.pixels();
+    await Promise.all([writeFile(join(evidence, `${name}-c1-04-water-shimmer-a.png`), first),
+      writeFile(join(evidence, `${name}-c1-04-water-shimmer-b.png`), second)]);
+    const motion = await pixelSamples(page, first, { kind: 'shift', x: 12, y: 151, width: 100, height: 160,
+      next: second.toString('base64'), dy: 0 });
+    assert.ok(motion.changed > .035 && motion.mean < 3, `Stationary viewing shows subtle moving water: ${JSON.stringify(motion)}`);
+  }
+  await releaseBrake();
+  const turned = await snapshot(page);
+  assert.ok(angleDifference(turned.drive.player.heading, turnTo) < .22);
+  assert.equal(visibleObjective(turned).label, 'world-destination');
+  await shot(page, `${name}-c1-04-corner`);
 }
 
 function angleDifference(a, b) {
@@ -278,7 +437,7 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
     const briefing = await openMission(page, 'C1-01');
     verifyDialog(briefing, ['Play', 'Story']);
     assert.equal(object(briefing, 'card-title').text, 'Reach the Marker');
-    assert.match(object(briefing, 'card-instruction').text, /accelerates on its own.*drive straight/i);
+    assert.match(object(briefing, 'card-instruction').text, /accelerates on its own.*straight.*marker/i);
     assert.equal(object(briefing, 'postcard-art:first-job').type, 'Sprite');
     verifyOpeningArt(briefing);
     const inset = object(briefing, 'teaching-inset');
@@ -289,6 +448,10 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
     await shot(page, 'desktop-briefing');
 
     await start(page);
+    const releaseBrake = await holdBrake(page, false);
+    await verifyNeighborhood(page, await snapshot(page));
+    await shot(page, 'desktop-c1-01-closed-junction');
+    await releaseBrake();
     await page.press('Escape');
     const paused = await phase(page, 'pause');
     verifyHud(paused);
@@ -336,6 +499,13 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
     await bank(page, 2);
     await assertClear(page, mainPayout, null);
     assertNextMission(await reload(page, 'home'), mainPayout);
+    for (const { id } of chapter.missions.slice(1, 3)) {
+      await openMission(page, id);
+      await start(page);
+      await phase(page, 'success');
+      await bank(page);
+    }
+    await captureFirstBend(page, 'desktop', false);
   });
 });
 
@@ -388,11 +558,11 @@ test('390×600 touch can brake, steer simultaneously, cancel and coast without s
 });
 
 for (const [width, height] of [[390, 600], [320, 568]]) {
-  test(`${width}×${height} renders unobstructed world markers for all three opening missions`, { timeout: 36000 }, async () => {
+  test(`${width}×${height} leads all three opening drives from the edge cue to the on-road target`, { timeout: 36000 }, async () => {
     await inBrowser(`mobile-markers-${width}`, { width, height, mobile: true }, async page => {
       await shot(page, `mobile-${width}-story`);
-      const opening = [['C1-01', 126], ['C1-02', 118], ['C1-03', 168]];
-      for (const [id, distance] of opening) {
+      const opening = chapter.missions.slice(0, 3);
+      for (const { id, spawn, objective } of opening) {
         const preview = await openMission(page, id);
         assert.equal(Boolean(object(preview, 'teaching-inset')), id === 'C1-01');
         if (id === 'C1-01') {
@@ -400,37 +570,41 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
           await shot(page, `mobile-${width}-briefing`);
         }
         await start(page);
-        const brake = await holdPoint(page, 'brake', 1);
-        await contact(page, 'touchStart', [brake]);
-        await poll(async () => (await snapshot(page)).input.brake, 'opening marker touch brake');
+        const releaseBrake = await holdBrake(page, true);
         await settle(page);
         const view = await snapshot(page);
-        const hud = verifyHud(view);
         assert.deepEqual([view.width, view.height], [width, height]);
         assert.match(object(view, 'objective-text').text, /reach the marker/i);
-        const mark = object(view, 'world-destination');
+        assert.deepEqual(view.drive.objective, objective);
+        assert.equal(view.drive.player.heading, spawn.heading);
+        assert.ok(Math.hypot(view.drive.player.x - spawn.x, view.drive.player.y - spawn.y) < 6);
+        const cue = visibleObjective(view);
+        assert.equal(cue.label, 'edge-destination', `${id} starts with the longer target outside the playfield`);
         const car = object(view, 'player-car');
-        const zoom = mark.bounds.width / Math.max(view.drive.objective.destination.radius * 2 + 1.35, 46);
-        assert.equal(mark.visible, true);
-        assert.equal(object(view, 'edge-destination').visible, false);
-        assert.ok(Math.abs(mark.position.x - car.position.x) < 4);
-        assert.ok(Math.abs((car.position.y - mark.position.y) - distance * zoom) < 27);
-        const hudBottom = Math.max(...hud.map(item => item.bounds.y + item.bounds.height));
-        assert.ok(mark.bounds.y > hudBottom && mark.bounds.y + mark.bounds.height < brake.y - 24,
-          `The world destination overlaps an overlay: ${JSON.stringify({ mark, hudBottom, brake })}`);
+        assert.ok(Math.abs(cue.position.x - car.position.x) < 4 && cue.position.y < car.position.y,
+          `${id} cue is straight ahead`);
         const screen = await page.pixels();
-        assert.ok(await pixelSamples(page, screen, { kind: 'aqua', ...mark.position }) > 70);
+        assert.ok(await pixelSamples(page, screen, { kind: 'aqua', ...cue.position }) > 70);
         assert.ok(await pixelSamples(page, screen, { kind: 'pink', ...car.position }) > 25);
-        if (id !== 'C1-02') await shot(page, `mobile-${width}-${id.toLowerCase()}-drive`);
+        if (id === 'C1-01') await verifyNeighborhood(page, view);
+        if (id !== 'C1-02') await shot(page, `mobile-${width}-${id.toLowerCase()}-edge-cue`);
+        await releaseBrake();
         if (id === 'C1-01' && width === 390) {
-          await contact(page, 'touchEnd');
           await page.click('drive:pause');
           await phase(page, 'pause');
           await shot(page, 'mobile-390-pause');
           await page.click(action('resume'));
-        } else {
-          await contact(page, 'touchEnd');
         }
+        const onRoad = await poll(async () => {
+          const current = await snapshot(page);
+          return current.phase === 'driving' && object(current, 'world-destination').visible && current;
+        }, `${id} hands off naturally from the edge cue to the on-road marker`);
+        assert.deepEqual(onRoad.input, neutral);
+        const mark = visibleObjective(onRoad);
+        assert.equal(mark.label, 'world-destination');
+        assert.ok(Math.abs(mark.position.x - object(onRoad, 'player-car').position.x) < 4);
+        assert.ok(await pixelSamples(page, await page.pixels(), { kind: 'aqua', ...mark.position }) > 70);
+        if (id !== 'C1-02') await shot(page, `mobile-${width}-${id.toLowerCase()}-drive`);
         await phase(page, 'success');
         if (id === 'C1-01') {
           if (width === 390) await shot(page, 'mobile-390-success');
@@ -442,9 +616,8 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
         }
         await bank(page);
       }
-      assert.deepEqual((await storage(page)).cleared, opening.map(([id]) => id));
-      const lesson = await openMission(page, 'C1-04');
-      assert.ok(object(lesson, 'teaching-inset').visible);
+      assert.deepEqual((await storage(page)).cleared, opening.map(({ id }) => id));
+      await captureFirstBend(page, `mobile-${width}`, true);
     });
   });
 }
@@ -510,10 +683,17 @@ test('An authored M1 bonus wreck loses the haul, preserves the main clear, and s
       const drive = (await snapshot(page)).drive;
       return Math.abs(drive.player.x - drive.objective.destination.x) < 16;
     }, 'car aligned near the center of the road');
-    await page.key('ArrowDown', 'rawKeyDown');
-    await delay(225);
-    const { player, objective } = (await snapshot(page)).drive;
-    await turnAcrossStreet(page, Math.atan2(objective.destination.y - player.y, objective.destination.x - player.x));
+    const aimAtMarker = async () => {
+      await page.key('ArrowDown', 'rawKeyDown');
+      await poll(async () => (await snapshot(page)).drive.player.speed < 1, 'brake before aiming at the marker');
+      const { player, objective } = (await snapshot(page)).drive;
+      await turnAcrossStreet(page, Math.atan2(objective.destination.y - player.y, objective.destination.x - player.x));
+    };
+    await aimAtMarker();
+    const { spawn, objective } = chapter.missions[0];
+    const midway = (spawn.y + objective.destination.y) / 2;
+    await poll(async () => (await snapshot(page)).drive.player.y <= midway, 'drive halfway toward the longer opening target');
+    await aimAtMarker();
     await phase(page, 'success');
     await assertClear(page, 0, { ...pendingMain, damage: 3 });
     await page.click(action('bonus'));
@@ -547,14 +727,10 @@ async function wheel(page, deltaY) {
   await page.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: 194, y: 290, deltaX: 0, deltaY });
 }
 
-function angleOffset(value, period) {
-  return ((value % period) + period) % period;
-}
-
 async function atOffset(page, goal) {
   await poll(async () => {
     const at = (await snapshot(page)).scroll;
-    return Math.min(angleOffset(at.offset - goal, at.period), angleOffset(goal - at.offset, at.period)) < .1;
+    return Math.abs(at.offset - goal) < .1;
   }, `Story offset ${goal}`);
   await settle(page);
 }
@@ -565,11 +741,47 @@ async function moveMap(page, goal) {
   await atOffset(page, goal);
 }
 
-test('Story wraps both directions with continuous pixels, genuine swipe and tap, and live navigation', { timeout: 38000 }, async () => {
-  await inBrowser('story-wrap', { width: 390, height: 600, mobile: true }, async page => {
+async function pressStoryKey(page, code) {
+  const virtualKey = { PageUp: 33, PageDown: 34, End: 35, Home: 36 }[code];
+  for (const type of ['rawKeyDown', 'keyUp']) {
+    await page.send('Input.dispatchKeyEvent', { type, code, key: code, windowsVirtualKeyCode: virtualKey });
+  }
+}
+
+function assertStoryBottom(view) {
+  assert.equal(view.scroll.offset, view.scroll.max);
+  const first = control(view, mission('C1-01'));
+  const story = control(view, 'story-map').bounds;
+  assert.ok(first.interactive && first.visible);
+  assert.equal(first.alpha, 1);
+  assert.ok(first.bounds.y >= story.y && first.bounds.y + first.bounds.height < story.y + story.height);
+  assert.equal(control(view, mission('C1-21')).visible, false);
+  assert.equal(object(view, 'district:neon-strip').visible, false);
+  const roads = view.scene.filter(node => node.label === 'route-road');
+  const dots = view.scene.filter(node => node.label === 'route-dots');
+  assert.equal(roads.length, 1);
+  assert.equal(dots.length, 1);
+  const [a, b] = view.scene.filter(node => node.label === 'map-tile');
+  const band = b.position.y - a.position.y;
+  const approachEnd = first.bounds.y + first.bounds.height / 2 + band * .075 + 12;
+  for (const { bounds } of [...roads, ...dots]) {
+    assert.ok(bounds.y + bounds.height < approachEnd, 'The route must end at Mission 1 after its final approach');
+  }
+}
+
+function assertStoryTop(view) {
+  assert.equal(view.scroll.offset, view.scroll.min);
+  assert.ok(object(view, 'district:neon-strip').visible);
+  assert.ok(view.scene.some(entry => entry.text === 'District locked · Unavailable' && entry.visible));
+  assert.ok(control(view, mission('C1-21')).visible);
+  assert.equal(control(view, mission('C1-01')).visible, false);
+}
+
+test('Story clamps real wheel, touch, and keyboard input at Mission 1 and reaches the upper district', { timeout: 38000 }, async () => {
+  await inBrowser('story-endpoints', { width: 390, height: 600, mobile: true }, async page => {
     const startView = await snapshot(page);
-    const { period } = startView.scroll;
-    assert.ok(period > 700);
+    const { min, max } = startView.scroll;
+    assertStoryBottom(startView);
     const missions = startView.controls.filter(item => item.action === 'open');
     assert.equal(missions.length, 21);
     assert.equal(new Set(missions.map(item => item.id)).size, 21);
@@ -578,51 +790,80 @@ test('Story wraps both directions with continuous pixels, genuine swipe and tap,
     assert.equal(startView.controls.some(item => item.id === 'district:neon-strip'), false);
     assert.equal((await fetch(origin + 'assets/ui/palmera-bay.jpg', { method: 'HEAD' })).headers.get('content-type'), 'image/jpeg');
 
-    await moveMap(page, period - 1);
-    const before = await page.pixels();
-    await shot(page, 'story-wrap-forward-before');
-    await wheel(page, 2);
-    await atOffset(page, 1);
-    const after = await page.pixels();
-    await shot(page, 'story-wrap-forward-after');
-    const adjacent = await pixelSamples(page, before, { kind: 'shift', y: 226, height: 208, dy: 2, next: after.toString('base64') });
-    assert.ok(adjacent.mismatch < .009 && adjacent.mean < 1.05, `Visible reset at seam: ${JSON.stringify(adjacent)}`);
-    await wheel(page, -2);
-    await atOffset(page, period - 1);
-    assert.ok(before.equals(await page.pixels()), 'An equal reverse wheel must return to the identical view');
-    await wheel(page, -period);
-    await atOffset(page, period - 1);
-    assert.ok(before.equals(await page.pixels()), 'A real wheel movement of one period must preserve pixels');
-
-    await moveMap(page, 100);
+    await shot(page, 'mobile-390-story-bottom');
     const initial = await page.pixels();
-    await wheel(page, -420);
-    await atOffset(page, period - 320);
-    await shot(page, 'story-wrap-up-district');
-    const screen = await snapshot(page);
-    assert.ok(object(screen, 'district:neon-strip').visible);
-    assert.ok(screen.scene.some(entry => entry.text === 'District locked · Unavailable' && entry.visible));
-    assert.ok(control(screen, mission('C1-01')).interactive);
-    await wheel(page, 420);
-    await atOffset(page, 100);
-    assert.ok(initial.equals(await page.pixels()));
-    await wheel(page, -420);
-    await atOffset(page, period - 320);
+    for (const delta of [460, 9999, 9999]) {
+      await wheel(page, delta);
+      assertStoryBottom(await snapshot(page));
+    }
+    await wheel(page, -37);
+    await atOffset(page, max - 37);
+    await wheel(page, 9999);
+    await atOffset(page, max);
+    const endpointDiff = await pixelSamples(page, initial, {
+      kind: 'shift', y: 0, height: startView.height, dy: 0, next: (await page.pixels()).toString('base64'),
+    });
+    assert.ok(endpointDiff.max <= 1 && endpointDiff.changed <= .0001, 'Returning to the bottom must restore its picture');
+    await page.press('Tab');
+    assert.equal((await snapshot(page)).focus, 'story-map');
+    for (const code of ['PageDown', 'PageDown', 'End']) {
+      await pressStoryKey(page, code);
+      assertStoryBottom(await snapshot(page));
+    }
+    await page.press('ArrowDown');
+    assertStoryBottom(await snapshot(page));
+    await page.press('ArrowUp');
+    await atOffset(page, max - 65);
+    await page.press('ArrowDown');
+    await atOffset(page, max);
+    await pressStoryKey(page, 'PageUp');
+    await atOffset(page, max - startView.height * .7);
+    await pressStoryKey(page, 'PageDown');
+    await atOffset(page, max);
+    await pressStoryKey(page, 'Home');
+    assertStoryTop(await snapshot(page));
+    await shot(page, 'mobile-390-story-top');
+    await wheel(page, -9999);
+    assertStoryTop(await snapshot(page));
+    await wheel(page, 36);
+    await atOffset(page, min + 36);
+    await pressStoryKey(page, 'End');
+    await atOffset(page, max);
 
     const pointer = { ...await page.center(mission('C1-01')), id: 1 };
     await contact(page, 'touchStart', [pointer]);
-    await contact(page, 'touchMove', [{ ...pointer, y: pointer.y - 29 }]);
+    await contact(page, 'touchMove', [{ ...pointer, y: pointer.y - 15 }]);
     await contact(page, 'touchEnd');
-    await atOffset(page, period - 291);
-    assert.equal((await snapshot(page)).phase, 'home', 'Swipe over Play must not launch the mission');
+    const clamped = await snapshot(page);
+    assert.equal(clamped.phase, 'home', 'Swipe over Play must not launch the mission');
+    assertStoryBottom(clamped);
+    await contact(page, 'touchStart', [pointer]);
+    for (const distance of [135, 270]) {
+      await contact(page, 'touchMove', [{ ...pointer, y: pointer.y - distance }]);
+      assertStoryBottom(await snapshot(page));
+    }
+    await contact(page, 'touchMove', [{ ...pointer, y: pointer.y - 233 }]);
+    await atOffset(page, max - 37);
+    await contact(page, 'touchEnd');
+    await pressStoryKey(page, 'End');
     const tap = { ...await page.center(mission('C1-01')), id: 1 };
     await contact(page, 'touchStart', [tap]);
     await contact(page, 'touchEnd');
     await phase(page, 'briefing');
+    await page.press('Escape');
+    const returned = await phase(page, 'home');
+    assert.equal(returned.focus, mission('C1-01'));
+    assertStoryBottom(returned);
+    await page.press('Enter');
+    await phase(page, 'briefing');
     await start(page);
     await phase(page, 'success');
-    await bank(page);
-    assertNextMission(await reload(page, 'home'), mainPayout);
+    const advanced = await bank(page);
+    assert.equal(advanced.focus, mission('C1-02'));
+    assert.ok(control(advanced, advanced.focus).interactive);
+    const reloaded = await reload(page, 'home');
+    assertNextMission(reloaded, mainPayout);
+    assert.ok(control(reloaded, mission('C1-02')).interactive);
     await shot(page, 'story-390-after-clear-reload');
 
     await page.press('Tab');
@@ -655,44 +896,164 @@ test('Story wraps both directions with continuous pixels, genuine swipe and tap,
   });
 });
 
-test('Desktop Story blends both art joins while preserving the vertical wrap and district view', { timeout: 26000 }, async () => {
-  await inBrowser('desktop-story-blend', {}, async page => {
+test('Widescreen Story keeps its backdrop stationary, art joins smooth, and finite endpoints through resize', { timeout: 36000 }, async () => {
+  await inBrowser('widescreen-story', {}, async page => {
     const home = await snapshot(page);
     assert.deepEqual([home.width, home.height], [1200, 800]);
-    const { period } = home.scroll;
-    const request = { kind: 'vertical-joins', columns: [240, 348, 852, 960], y: 222, height: 455 };
-    async function checkBlend() {
-      for (const sample of await pixelSamples(page, await page.pixels(), request)) {
-        assert.ok(sample.joinChange < sample.nearbyMean * 1.5 + 2, `Hard desktop join: ${JSON.stringify(sample)}`);
+    assertStoryBottom(home);
+    const { min, max } = home.scroll;
+    const sourceAspect = await page.read(async () => {
+      const response = await fetch('/assets/ui/palmera-bay.jpg');
+      const bitmap = await createImageBitmap(await response.blob());
+      const aspect = bitmap.width / bitmap.height;
+      bitmap.close();
+      return aspect;
+    });
+    const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < .01, `${message}: ${actual} ≈ ${expected}`);
+    async function checkLayout(view) {
+      const background = object(view, 'story-background');
+      const mask = object(view, 'story-map-mask');
+      const dragBounds = control(view, 'story-map').bounds;
+      const left = dragBounds.x - 4;
+      const mapWidth = dragBounds.width + 8;
+      assert.equal(background.type, 'Sprite');
+      assert.ok(background.visible);
+      assert.equal(mask.type, 'Sprite');
+      near(mask.position.x, left, 'Mask starts at the map edge');
+      near(mask.position.x + mapWidth / 2, view.width / 2, 'Map mask stays centered');
+      near(background.bounds.width / background.bounds.height, sourceAspect, 'Backdrop keeps the source aspect');
+      assert.ok(background.bounds.x <= 0 && background.bounds.y <= 0);
+      assert.ok(background.bounds.x + background.bounds.width >= view.width);
+      assert.ok(background.bounds.y + background.bounds.height >= view.height);
+      const tiles = view.scene.filter(node => node.label === 'map-tile');
+      const band = tiles[1].position.y - tiles[0].position.y;
+      for (const { type, bounds } of tiles.filter(node => node.visible)) {
+        assert.equal(type, 'Sprite');
+        near(bounds.width, (band + 112) * sourceAspect, 'Foreground art scales equally in both axes');
+        near(bounds.x + bounds.width / 2, view.width / 2, 'Foreground art stays centered');
       }
+      if (left >= 40) {
+        const request = { kind: 'vertical-joins', columns: [left, left + mapWidth], y: 222, height: 455 };
+        const pixels = await page.pixels();
+        for (const sample of await pixelSamples(page, pixels, request)) {
+          assert.ok(sample.joinChange < sample.nearbyMean * 1.5 + 2, `Hard desktop join: ${JSON.stringify(sample)}`);
+        }
+        const wings = [16, left + mapWidth + 16].map(x => ({ x, width: left - 32 }));
+        for (const sample of await pixelSamples(page, pixels, { kind: 'backdrop-coverage', wings, y: 225, height: 385, middle: 400 })) {
+          assert.ok(sample.range.every(range => range >= 8), `Missing backdrop art in a wing: ${JSON.stringify(sample)}`);
+          assert.ok(sample.midline < 1, `Hard horizontal backdrop join: ${JSON.stringify(sample)}`);
+        }
+      }
+      return { x: left, width: mapWidth };
+    }
+    async function resize(width, height) {
+      await page.send('Emulation.setDeviceMetricsOverride', {
+        width, height, deviceScaleFactor: 1, mobile: false, screenWidth: width, screenHeight: height,
+      });
+      await poll(async () => {
+        const view = await snapshot(page);
+        return view.width === width && view.height === height;
+      }, `Story to resize to ${width} × ${height}`);
+      await settle(page);
+      return snapshot(page);
     }
     await settle(page);
-    await checkBlend();
-    await shot(page, 'desktop-story-blend-initial');
+    const mask = await checkLayout(home);
+    const still = await page.pixels();
+    await shot(page, 'desktop-1200-story-bottom');
+    await wheel(page, 9999);
+    assertStoryBottom(await snapshot(page));
+    assert.ok(still.equals(await page.pixels()), 'A clamped desktop wheel keeps the bottom picture fixed');
 
-    await moveMap(page, period - 1);
-    await shot(page, 'desktop-story-wrap-before');
+    const [firstTile, secondTile] = home.scene.filter(node => node.label === 'map-tile');
+    const band = secondTile.position.y - firstTile.position.y;
+    const internalJoin = band - 360;
+    await moveMap(page, internalJoin);
     const before = await page.pixels();
+    for (const [x, width] of [[0, mask.x], [mask.x + mask.width, mask.x]]) {
+      const wing = await pixelSamples(page, still, { kind: 'shift', x, width, y: 160, height: 480, dy: 0, next: before.toString('base64') });
+      assert.equal(wing.mean, 0, 'Artwork outside the mask stays stationary while the map scrolls');
+    }
     await wheel(page, 2);
-    await atOffset(page, 1);
+    await atOffset(page, internalJoin + 2);
     const after = await page.pixels();
-    await shot(page, 'desktop-story-wrap-after');
-    const adjacent = await pixelSamples(page, before, { kind: 'shift', y: 230, height: 420, dy: 2, next: after.toString('base64') });
-    assert.ok(adjacent.mismatch < .009 && adjacent.mean < 1.05, `Visible reset at the desktop seam: ${JSON.stringify(adjacent)}`);
-    await wheel(page, -2);
-    await atOffset(page, period - 1);
-    assert.ok(before.equals(await page.pixels()), 'Reverse wheel must return to the identical desktop view');
-    await wheel(page, period);
-    await atOffset(page, period - 1);
-    assert.ok(before.equals(await page.pixels()), 'A full period must preserve the desktop pixels');
+    const adjacent = await pixelSamples(page, before, {
+      kind: 'shift', x: mask.x + 100, width: mask.width - 200, y: 295, height: 190, dy: 2, next: after.toString('base64'),
+    });
+    assert.ok(adjacent.mismatch < .009 && adjacent.mean < 1.05, `Visible reset at an internal art join: ${JSON.stringify(adjacent)}`);
+    await shot(page, 'desktop-story-internal-join');
 
-    await wheel(page, -399);
-    await atOffset(page, period - 400);
+    await wheel(page, -9999);
+    await atOffset(page, min);
     const district = await snapshot(page);
-    assert.ok(object(district, 'district-status').visible);
-    assert.ok(control(district, mission('C1-01')).interactive);
-    await checkBlend();
-    await shot(page, 'desktop-story-neon-strip');
+    assertStoryTop(district);
+    assert.deepEqual(object(district, 'menu-header').position, object(home, 'menu-header').position);
+    assert.deepEqual(control(district, 'nav:home').bounds, control(home, 'nav:home').bounds);
+    await checkLayout(district);
+    await shot(page, 'desktop-1200-story-top');
+
+    for (const [width, height] of [[1920, 800], [720, 800], [721, 800], [320, 568], [390, 600]]) {
+      const resized = await resize(width, height);
+      assertStoryTop(resized);
+      if (width === 1920 || width === 320) await shot(page, `${width}-story-top`);
+    }
+
+    await pressStoryKey(page, 'End');
+    assertStoryBottom(await snapshot(page));
+    for (const [width, height] of [[320, 568], [390, 600], [720, 800], [721, 800], [1920, 800], [1200, 800]]) {
+      const resized = await resize(width, height);
+      assertStoryBottom(resized);
+      await shot(page, `${width}-story-bottom-after-resize`);
+    }
+    await atOffset(page, max);
+    assert.ok(still.equals(await page.pixels()), 'Resizing through the breakpoint must restore the same desktop bottom picture');
+
+    const wide = await resize(1920, 800);
+    assert.deepEqual(wide.scroll, home.scroll);
+    await checkLayout(wide);
+    const wideMission = control(wide, mission('C1-01'));
+    const homeMission = control(home, mission('C1-01'));
+    assert.ok(wideMission.interactive);
+    assert.deepEqual(wideMission.bounds, { ...homeMission.bounds, x: homeMission.bounds.x + 360 });
+    const fullWidth = await resize(720, 800);
+    assert.deepEqual(fullWidth.scroll, home.scroll);
+    assert.equal(object(fullWidth, 'story-background'), undefined);
+    const justWider = await resize(721, 800);
+    assert.deepEqual(justWider.scroll, fullWidth.scroll);
+    const fullWidthMission = control(fullWidth, mission('C1-01'));
+    const justWiderMission = control(justWider, mission('C1-01'));
+    assert.ok(justWiderMission.interactive);
+    assert.deepEqual(justWiderMission.bounds, { ...fullWidthMission.bounds, x: fullWidthMission.bounds.x + .5 });
+    await checkLayout(justWider);
+    const marker = mission('C1-10');
+    const pinY = control(justWider, marker).bounds.y + max;
+    await moveMap(page, pinY - 360);
+    assert.ok(control(await snapshot(page), marker).visible);
+    const compact = await resize(390, 600);
+    assert.ok(control(compact, marker).visible);
+    assert.equal(object(compact, 'story-background'), undefined);
+    assert.equal(object(compact, 'story-map-mask'), undefined);
+    await resize(721, 800);
+    await pressStoryKey(page, 'End');
+    const pointer = await page.center(mission('C1-01'));
+    await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', ...pointer, button: 'left', buttons: 1, clickCount: 1 });
+    const end = { x: pointer.x, y: pointer.y - 29 };
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...end, buttons: 1 });
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', ...end, button: 'left', clickCount: 1 });
+    const clamped = await snapshot(page);
+    assert.equal(clamped.phase, 'home', 'A drag over the mission must remain on Story');
+    assertStoryBottom(clamped);
+    await page.press('Tab');
+    await page.press('Tab');
+    assert.equal((await snapshot(page)).focus, mission('C1-01'));
+    await pressStoryKey(page, 'Home');
+    const focusedTop = await resize(320, 568);
+    assert.equal(focusedTop.focus, mission('C1-01'));
+    assertStoryTop(focusedTop);
+    await pressStoryKey(page, 'End');
+    await settle(page);
+    assertStoryBottom(await snapshot(page));
+    assert.equal((await openMission(page, 'C1-01')).run.missionId, 'C1-01');
   });
 });
 
