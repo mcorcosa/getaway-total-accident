@@ -3,8 +3,8 @@ import { behind, distance, roadLine } from './world.mjs';
 export const STEP = 1 / 60;
 export const NEUTRAL_INPUT = Object.freeze({ left: false, right: false, brake: false });
 
-const reverseDwell = 1;
-const reverseSpeed = 36;
+const touchFullAuthorityPace = .35;
+const touchTopAuthority = .80;
 const wrappedAngle = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 
 function patrolWaypoint(map, patrol, player) {
@@ -56,7 +56,6 @@ export function startDrive(segment, map, vehicle, damage = vehicle.maxDamage) {
   return {
     segment, map, vehicle, damage,
     player: { x, y, heading, travelHeading: heading, speed: 0 },
-    brakeDwell: 0,
     patrol: segment.patrol ? { ...behind(segment.spawn, segment.patrol.startGap), heading } : null,
     patrolWaypoint: null,
     nextRoute: 0,
@@ -77,33 +76,25 @@ function setIncident(drive, message) {
   drive.incidentTime = 1.15;
 }
 
-function nextSpeed(drive, brake, forwardTarget, dt) {
-  const { player: { speed }, vehicle } = drive;
-  if (!brake) {
-    drive.brakeDwell = 0;
-    return approach(speed, speed < 0 ? 0 : forwardTarget, vehicle.acceleration * dt);
-  }
-  if (drive.brakeDwell >= reverseDwell) return approach(speed, -reverseSpeed, vehicle.acceleration * dt);
-  // The frame that finishes braking is still a moving frame. The dwell starts on the next one.
-  if (speed === 0) drive.brakeDwell = Math.min(reverseDwell, drive.brakeDwell + dt);
-  return approach(speed, 0, 220 * dt);
-}
-
 function driveCar(drive, input, dt) {
   const { player, vehicle, map } = drive;
   const steering = Number.isFinite(input.steering)
     ? Math.max(-1, Math.min(1, input.steering))
     : Number(Boolean(input.right)) - Number(Boolean(input.left));
-  const pace = Math.abs(player.speed) / vehicle.speed;
+  const pace = player.speed / vehicle.speed;
   const turn = vehicle.turn * (.35 + .65 * Math.min(1, pace * 2)) * (1 - .25 * pace);
+  const authority = input.touchSteering && player.speed > 0
+    ? 1 - (1 - touchTopAuthority) * Math.max(0, (Math.min(1, pace) - touchFullAuthorityPace) / (1 - touchFullAuthorityPace))
+    : 1;
   const steeringSpeed = 1 - (1 - .67) * Math.abs(steering);
-  player.speed = nextSpeed(drive, input.brake, vehicle.speed * steeringSpeed, dt);
-  const direction = player.speed < 0 ? -1 : 1;
-  player.heading = wrappedAngle(player.heading + direction * steering * turn * dt);
+  const target = input.brake ? 0 : vehicle.speed * steeringSpeed;
+  const acceleration = (input.brake ? 220 : vehicle.acceleration) * dt;
+  player.speed = approach(player.speed, target, acceleration);
+  player.heading = wrappedAngle(player.heading + steering * turn * authority * dt);
   const slip = wrappedAngle(player.heading - player.travelHeading);
   player.travelHeading = wrappedAngle(player.travelHeading +
     slip * Math.min(1, dt * vehicle.grip * (1 - .45 * pace)));
-  const speed = Math.abs(player.speed);
+  const speed = player.speed;
   drive.skidding = Math.abs(slip) > .26 && speed > vehicle.speed * .46;
   if (drive.skidding) {
     drive.skidMarks.push({ x: player.x, y: player.y, heading: player.travelHeading });

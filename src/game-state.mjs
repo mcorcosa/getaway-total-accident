@@ -85,10 +85,6 @@ export function createGame({ world, chapter }, store) {
     return true;
   }
 
-  function resetBrakeHold() {
-    if (state.run?.drive) state.run.drive.brakeDwell = 0;
-  }
-
   function dispatch(action, value) {
     const { phase, run } = state;
     switch (action) {
@@ -126,7 +122,6 @@ export function createGame({ world, chapter }, store) {
         return true;
       case 'pause':
         if (phase !== 'driving') return false;
-        resetBrakeHold();
         state.phase = 'pause';
         return true;
       case 'resume':
@@ -140,5 +135,5 @@ export function createGame({ world, chapter }, store) {
     }
   }
 
-  return { state, dispatch, tick, resetBrakeHold, mapFor: missionId => maps.get(missionId) };
+  return { state, dispatch, tick, mapFor: missionId => maps.get(missionId) };
 }

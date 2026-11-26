@@ -192,7 +192,7 @@ test('steering, grip and braking affect motion, while one continuous wall contac
   assert.deepEqual(fragile.outcome, { kind: 'failure', reason: 'wrecked' });
 });
 
-test('a brief brake tap feathers speed while a held brake stops the car', () => {
+test('a brief brake tap feathers speed while a held brake keeps the car stopped', () => {
   function atCruisingSpeed() {
     const drive = startDrive(first, map, vehicle);
     drive.player.speed = 120;
@@ -212,79 +212,25 @@ test('a brief brake tap feathers speed while a held brake stops the car', () => 
   assert.equal(hold.player.speed, 0);
   assert.ok(Math.abs(hold.player.x - first.spawn.x - 31.733333333) < 1e-9);
   const stopped = { ...hold.player };
-  stepDrive(hold, brake, STEP);
-  assert.deepEqual(hold.player, stopped);
-  for (let frame = 1; frame < 60; frame += 1) stepDrive(hold, brake, STEP);
-  assert.deepEqual(hold.player, stopped, 'the forward stop is followed by sixty stationary frames');
-  stepDrive(hold, brake, STEP);
-  assert.ok(hold.player.speed < 0 && hold.player.x < stopped.x);
+  for (let frame = 0; frame < 180; frame += 1) stepDrive(hold, brake, STEP);
+  assert.deepEqual(hold.player, stopped, 'holding the brake after stopping keeps the car stationary');
+  stepDrive(hold, NEUTRAL_INPUT, STEP);
+  assert.equal(hold.player.speed, vehicle.acceleration * STEP);
+  assert.ok(hold.player.x > stopped.x);
 });
 
-test('a fresh brake hold from rest waits a second and reverse rolls smoothly through zero on release', () => {
+test('holding the brake from rest permits steering at a fixed position until release', () => {
   const drive = startDrive(first, map, vehicle);
-  for (let frame = 0; frame < 60; frame += 1) stepDrive(drive, brake, STEP);
-  assert.equal(drive.player.speed, 0);
-  assert.equal(drive.player.x, first.spawn.x);
-  stepDrive(drive, brake, STEP);
-  assert.equal(drive.player.speed, -vehicle.acceleration * STEP);
-  for (let frame = 0; frame < 15; frame += 1) stepDrive(drive, brake, STEP);
-  assert.equal(drive.player.speed, -36);
-
-  stepDrive(drive, { ...brake, right: true }, STEP);
-  assert.ok(drive.player.heading < first.spawn.heading, 'right steering takes the rear right in reverse');
-  const reversingX = drive.player.x;
-  stepDrive(drive, NEUTRAL_INPUT, STEP);
-  assert.ok(drive.player.speed > -36 && drive.player.speed < 0 && drive.player.x < reversingX);
-  for (let frame = 0; frame < 30 && drive.player.speed < 0; frame += 1) stepDrive(drive, NEUTRAL_INPUT, STEP);
-  assert.equal(drive.player.speed, 0);
+  const parked = { ...drive.player };
+  for (let frame = 0; frame < 180; frame += 1) stepDrive(drive, brake, STEP);
+  assert.deepEqual(drive.player, parked);
+  const input = { ...brake, steering: .5, touchSteering: true };
+  for (let frame = 0; frame < 10; frame += 1) stepDrive(drive, input, STEP);
+  assert.ok(drive.player.heading > parked.heading);
+  assert.deepEqual([drive.player.x, drive.player.y, drive.player.speed], [parked.x, parked.y, 0]);
   stepDrive(drive, NEUTRAL_INPUT, STEP);
   assert.equal(drive.player.speed, vehicle.acceleration * STEP);
-});
-
-test('an interrupted brake hold, a pause, and rebraking during reverse each require a fresh dwell', () => {
-  const game = makeGame();
-  startMission(game);
-  const drive = game.state.run.drive;
-  const hold = frames => {
-    for (let frame = 0; frame < frames; frame += 1) game.tick(brake, STEP);
-  };
-  hold(59);
-  game.resetBrakeHold(); // release and re-press between simulation ticks
-  hold(59);
-  assert.equal(drive.player.speed, 0);
-  assert.equal(game.dispatch('pause'), true);
-  hold(120);
-  assert.equal(game.dispatch('resume'), true);
-  hold(60);
-  assert.equal(drive.player.speed, 0);
-  hold(10);
-  assert.ok(drive.player.speed < 0);
-
-  game.tick(NEUTRAL_INPUT, STEP);
-  assert.ok(drive.player.speed < 0);
-  const rollingBack = drive.player.speed;
-  hold(1);
-  assert.ok(drive.player.speed > rollingBack, 'a new brake hold first stops reverse motion');
-  for (let frame = 0; frame < 30 && drive.player.speed < 0; frame += 1) hold(1);
-  assert.equal(drive.player.speed, 0);
-  hold(60);
-  assert.equal(drive.player.speed, 0);
-  hold(1);
-  assert.ok(drive.player.speed < 0);
-});
-
-test('reverse recognizes a rear pickup and marker and stops at a rear road closure', () => {
-  const objective = { pickup: { x: 82, y: 82, radius: 2 }, destination: { x: 70, y: 82, radius: 2 } };
-  const delivery = startDrive({ ...first, objective }, map, vehicle);
-  for (let frame = 0; frame < 150 && !delivery.outcome; frame += 1) stepDrive(delivery, brake, STEP);
-  assert.equal(delivery.pickedUp, true);
-  assert.deepEqual(delivery.outcome, { kind: 'success' });
-
-  const wall = startDrive({ ...first, spawn: { ...first.spawn, x: 12 } }, map, vehicle);
-  for (let frame = 0; frame < 180; frame += 1) stepDrive(wall, brake, STEP);
-  assert.ok(wall.player.x < 2 && onRoad(map, wall.player));
-  assert.ok(wall.player.speed > -36);
-  assert.equal(wall.damage, vehicle.maxDamage);
+  assert.ok(drive.player.x > parked.x);
 });
 
 test('partial steering produces a proportional turn and a gentler speed cap', () => {
@@ -318,6 +264,31 @@ test('partial steering produces a proportional turn and a gentler speed cap', ()
     assert.deepEqual(advance({ steering: invalid }), straight);
     assert.deepEqual(advance({ steering: invalid, right: true }), full);
   }
+});
+
+test('touch steering keeps full turning authority at low speed and eases yaw at cruise', () => {
+  function turnFrom(speed, input) {
+    const drive = startDrive(first, map, vehicle);
+    drive.player.speed = speed;
+    stepDrive(drive, { ...NEUTRAL_INPUT, ...input }, STEP);
+    return drive.player;
+  }
+
+  const full = { steering: 1 };
+  const touch = { ...full, touchSteering: true };
+  const cruiseDigital = turnFrom(vehicle.speed, { right: true });
+  assert.deepEqual(turnFrom(vehicle.speed, full), cruiseDigital);
+  const cruiseTouch = turnFrom(vehicle.speed, touch);
+  const neutralHeading = first.spawn.heading;
+  assert.ok(Math.abs((cruiseTouch.heading - neutralHeading) / (cruiseDigital.heading - neutralHeading) - .8) < 1e-9);
+  assert.equal(cruiseTouch.speed, cruiseDigital.speed);
+  for (const speed of [0, vehicle.speed * .30]) {
+    assert.deepEqual(turnFrom(speed, touch), turnFrom(speed, full));
+  }
+  const mid = vehicle.speed * .675;
+  const middleTouch = turnFrom(mid, touch);
+  const middleDigital = turnFrom(mid, full);
+  assert.ok(Math.abs((middleTouch.heading - neutralHeading) / (middleDigital.heading - neutralHeading) - .90) < 1e-9);
 });
 
 test('patrol starts behind the car, follows drivable corners, and needs sustained proximity to capture', () => {

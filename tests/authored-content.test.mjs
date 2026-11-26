@@ -150,7 +150,7 @@ test('vehicle pace comes from the catalog in both the authored chapter and the f
   }
 });
 
-test('the authored patrol travels at its fixed speed, captures a reversing player and resets on replay', async () => {
+test('the authored patrol travels at its fixed speed, captures a stopped player and resets on replay', async () => {
   const content = await authoredContent();
   const { chapter } = content;
   const mission = chapter.missions[13];
@@ -178,7 +178,7 @@ test('the authored patrol travels at its fixed speed, captures a reversing playe
   assert.ok(drive.player.speed < starter.speed);
   for (let step = 0; step < 600 && game.state.phase === 'driving'; step += 1) game.tick(brake);
   assert.equal(game.state.phase, 'failure');
-  assert.ok(drive.player.speed < 0);
+  assert.equal(drive.player.speed, 0);
   assert.deepEqual(drive.outcome, { kind: 'failure', reason: 'busted' });
   assert.ok(drive.capture >= originalRule.captureSeconds);
   assert.deepEqual(mission.patrol, originalRule);

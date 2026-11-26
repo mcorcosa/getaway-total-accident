@@ -11,6 +11,8 @@ const dialogs = new Set(['briefing', 'pause', 'success', 'failure', 'bonus-brief
 const escapeAction = { driving: 'pause', pause: 'resume', briefing: 'home', 'bonus-briefing': 'cancel-bonus', failure: 'home' };
 const statusInput = new WeakMap();
 const steeringDeadZone = 7;
+const touchDeadZone = 9;
+const rimGrabFraction = .70;
 const wheelHubRadius = 14;
 const wheelLock = Math.PI / 2;
 const wheelDeadZone = Math.PI / 36;
@@ -25,50 +27,38 @@ function wheelDelta(previous, current) {
   return Math.atan2(cross, dot);
 }
 
-function pulledSteering(x, travel) {
-  const horizontal = Math.abs(x) - steeringDeadZone;
-  let magnitude = clamp(horizontal / (travel - steeringDeadZone), 0, 1);
+function pulledSteering(x, travel, touch) {
+  const deadZone = touch ? touchDeadZone : steeringDeadZone;
+  const horizontal = Math.abs(x) - deadZone;
+  let magnitude = clamp(horizontal / (travel - deadZone), 0, 1);
   if (1 - magnitude < 1e-9) magnitude = 1;
+  if (touch) magnitude *= .65 + .35 * magnitude;
   return x < 0 && magnitude > 0 ? -magnitude : magnitude;
 }
 
 function updateSteering(hold, point) {
   const { center, travel } = hold;
-  let x = point.x - center.x;
-  let y = point.y - center.y;
-  const distance = Math.hypot(x, y);
-  const rimPoint = distance >= wheelHubRadius ? { x, y } : null;
-  const delta = wheelDelta(hold.rimPoint, rimPoint);
-  hold.rimPoint = rimPoint;
-  if (!hold.offset) hold.rotating = Boolean(rimPoint);
-  if (!hold.rotating) {
-    if (delta === null) hold.pendingTurn = 0;
-    else if (delta) {
-      const keepsTurning = hold.pendingTurn * delta > 0;
-      hold.pendingTurn = keepsTurning ? hold.pendingTurn + delta : delta;
-      // A center grab stays a proportional pull until it traces a deliberate arc.
-      hold.rotating = keepsTurning && Math.abs(hold.pendingTurn) >= Math.PI / 12;
-    }
-  }
-  if (distance > travel) {
-    x = (x / distance) * travel;
-    y = (y / distance) * travel;
-  }
+  const displacement = { x: point.x - center.x, y: point.y - center.y };
+  const distance = Math.hypot(displacement.x, displacement.y);
+  const x = distance > travel ? displacement.x / distance * travel : displacement.x;
+  const y = distance > travel ? displacement.y / distance * travel : displacement.y;
   let steering;
   if (hold.rotating) {
-    hold.rotation += delta ?? 0;
+    const rimPoint = distance >= wheelHubRadius ? displacement : null;
+    const delta = wheelDelta(hold.rimPoint, rimPoint) ?? 0;
+    hold.rimPoint = rimPoint;
+    hold.rotation += delta;
     // The wheel art follows every turn. The car only takes a finite angle to reach full lock.
-    hold.turnAngle = clamp(hold.turnAngle + (delta ?? 0), -wheelLock, wheelLock);
+    hold.turnAngle = clamp(hold.turnAngle + delta, -wheelLock, wheelLock);
     const angle = Math.abs(hold.turnAngle);
     steering = angle <= wheelDeadZone ? 0 : Math.sign(hold.turnAngle) * (angle - wheelDeadZone) / (wheelLock - wheelDeadZone);
   } else {
-    steering = pulledSteering(x, travel);
+    steering = pulledSteering(x, travel, hold.touch);
     hold.rotation = steering * .65;
-    hold.turnAngle = steering ? Math.sign(steering) * wheelDeadZone + steering * (wheelLock - wheelDeadZone) : 0;
   }
   const previous = hold.offset;
   if (previous?.x === x && previous?.y === y && previous.steering === steering && previous.rotation === hold.rotation) return false;
-  hold.offset = { x, y, steering, rotation: hold.rotation };
+  hold.offset = { x, y, steering, rotation: hold.rotation, touch: hold.touch };
   return true;
 }
 
@@ -200,6 +190,9 @@ export function gameUI(app, content, textures, game, effects) {
           const { width, height } = node.hitArea;
           hold.center = node.toGlobal({ x: width / 2, y: height / 2 });
           hold.travel = control.steeringTravel;
+          hold.touch = e.pointerType === 'touch';
+          // Select the gesture at contact so an ordinary hub correction never acquires the rim.
+          hold.rotating = Math.hypot(e.global.x - hold.center.x, e.global.y - hold.center.y) >= width / 2 * rimGrabFraction;
           hold.rotation = 0;
           hold.turnAngle = 0;
           updateSteering(hold, e.global);
@@ -416,7 +409,7 @@ export function gameUI(app, content, textures, game, effects) {
 
   return {
     show, draw, key, release,
-    steering: () => drivingPointers.get('steer')?.offset.steering ?? 0,
+    steeringInput: () => drivingPointers.get('steer')?.offset,
     *heldDirections() {
       for (const { direction } of drivingPointers.values()) {
         if (direction) yield direction;

@@ -11,6 +11,9 @@ const params = new URLSearchParams(location.search);
 const localEngineering = !document.documentElement.hasAttribute('data-pages-build');
 const fixture = localEngineering && params.get('fixture') === '1';
 const canvas = document.getElementById('stage');
+for (const type of ['selectstart', 'contextmenu']) {
+  canvas.addEventListener(type, event => event.preventDefault());
+}
 
 function start(app, gameUI, content, textures, attachObservation) {
   let notice = '';
@@ -31,12 +34,14 @@ function start(app, gameUI, content, textures, attachObservation) {
     const active = new Set([...keys.values(), ...ui.heldDirections()]);
     const left = active.has('left');
     const right = active.has('right');
-    const steering = left || right ? Number(right) - Number(left) : ui.steering();
-    return { left: left || steering < 0, right: right || steering > 0, brake: active.has('brake'), steering };
+    const wheel = left || right ? undefined : ui.steeringInput();
+    const steering = wheel?.steering ?? Number(right) - Number(left);
+    const held = { left: left || steering < 0, right: right || steering > 0, brake: active.has('brake'), steering };
+    if (wheel?.touch && steering) held.touchSteering = true;
+    return held;
   }
 
   function clearPointerInput() {
-    game.resetBrakeHold();
     ui.cancel();
     for (const id of captures) {
       if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
@@ -97,7 +102,7 @@ function start(app, gameUI, content, textures, attachObservation) {
     press(event.code, direction, event.repeat);
   });
   window.addEventListener('keyup', event => {
-    if (keys.delete(event.code)) drawAfterRelease();
+    if (keys.delete(event.code)) ui.draw(input());
   });
   canvas.addEventListener('blur', () => {
     clearInput();
@@ -106,13 +111,7 @@ function start(app, gameUI, content, textures, attachObservation) {
 
   function release(event) {
     captures.delete(event.pointerId);
-    if (ui.release(event.pointerId)) drawAfterRelease();
-  }
-
-  function drawAfterRelease() {
-    const held = input();
-    if (!held.brake) game.resetBrakeHold();
-    ui.draw(held);
+    if (ui.release(event.pointerId)) ui.draw(input());
   }
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     window.addEventListener(type, release, true);

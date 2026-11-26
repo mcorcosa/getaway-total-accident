@@ -366,17 +366,6 @@ async function holdBrake(page, mobile) {
   return () => brake ? contact(page, 'touchEnd', [brake]) : page.key('ArrowDown', 'keyUp');
 }
 
-function keepBrakeFresh(page, mobile, lift) {
-  let started = performance.now();
-  return async () => {
-    if (performance.now() - started < 550) return;
-    // Lift and reapply the brake while steering stays held, as a player can do to avoid reverse.
-    await lift();
-    lift = await holdBrake(page, mobile);
-    started = performance.now();
-  };
-}
-
 function playfield(view) {
   const hudBottom = Math.max(...verifyHud(view).map(item => item.bounds.y + item.bounds.height));
   const footerTop = object(view, 'driving-controls').bounds.y;
@@ -442,9 +431,9 @@ async function captureFirstBend(page, name, mobile) {
     const { player, objective } = view.drive;
     return player.y - objective.destination.y < 48 && view;
   }, 'approach the first bend under normal driving', straightDriveTimeout(segment));
+  assert.ok(approach.drive.player.speed >= .90 * 120, `First Bend entry speed was ${approach.drive.player.speed}`);
   assert.ok(approach.drive.damage === 4);
   releaseBrake = await holdBrake(page, mobile);
-  const keepBrake = keepBrakeFresh(page, mobile, releaseBrake);
   await poll(async () => (await snapshot(page)).drive.player.speed < 1, 'brake naturally at the first bend');
   const corner = await snapshot(page);
   assert.equal(corner.phase, 'driving');
@@ -461,16 +450,12 @@ async function captureFirstBend(page, name, mobile) {
   }
   await poll(async () => {
     const view = await snapshot(page);
-    if (view.input.brake && view.input.right && angleDifference(view.drive.player.heading, turnTo) < .10) return true;
-    await keepBrake();
-    return false;
+    return view.input.brake && view.input.steering === 1 && angleDifference(view.drive.player.heading, turnTo) < .10;
   }, 'turn toward the open street using the real steering control');
   if (mobile) await contact(page, 'touchEnd', [await holdPoint(page, 'steer', 2)]);
   else await page.key('ArrowRight', 'keyUp');
   if (!mobile) {
-    await releaseBrake();
     await settle(page);
-    releaseBrake = await holdBrake(page, false);
     await poll(async () => (await snapshot(page)).drive.player.speed === 0, 'stop before sampling the water');
     const clip = { x: 12, y: 68, width: 135, height: 50, scale: 1 };
     const sampleWater = async () => {
@@ -494,6 +479,8 @@ async function captureFirstBend(page, name, mobile) {
   assert.ok(angleDifference(turned.drive.player.heading, turnTo) < .22);
   assert.equal(visibleObjective(turned).label, 'world-destination');
   await shot(page, `${name}-c1-04-corner`);
+  const finished = await phase(page, 'success');
+  assert.equal(finished.drive.damage, 4, 'the full-speed First Bend clears in full condition');
 }
 
 function headingDelta(a, b) {
@@ -625,6 +612,93 @@ test('Authored M1 bonus success carries condition and automatically banks both p
   });
 });
 
+test('390×600 hub touches make small highway-speed corrections and countersteer through center', { timeout: 20000 }, async t => {
+  async function cruise(page) {
+    await openMission(page, 'C1-01');
+    await start(page);
+    const view = await poll(async () => {
+      const scene = await snapshot(page);
+      return scene.phase === 'driving' && scene.drive.player.speed === 120 && scene;
+    }, 'Starter Coupe to reach cruise speed');
+    return { course: view.drive.player.heading, finger: await holdPoint(page, 'steer', 2) };
+  }
+
+  await inBrowser('high-speed-hub-pull', { width: 390, height: 600, mobile: true }, async page => {
+    const { course, finger } = await cruise(page);
+    await contact(page, 'touchStart', [finger]);
+    await moveContacts(page, { ...finger, x: finger.x + 15 });
+
+    async function sample() {
+      return page.read(async () => {
+        const read = () => {
+          const scene = window.__getawayScene();
+          return { player: scene.drive.player, input: scene.input };
+        };
+        const from = read();
+        const start = performance.now();
+        const end = await new Promise(resolve => {
+          function frame(time) {
+            if (time - start >= 200) resolve(time);
+            else requestAnimationFrame(frame);
+          }
+          requestAnimationFrame(frame);
+        });
+        return { from, to: read(), seconds: (end - start) / 1000 };
+      });
+    }
+
+    const pull = await sample();
+    const yaw = headingDelta(pull.to.player.heading, pull.from.player.heading) * .2 / pull.seconds;
+    assert.ok(pull.from.player.speed >= .90 * 120);
+    assert.ok(yaw > .025 && yaw < 5 * Math.PI / 180, `15 px at cruise should turn gently, measured ${yaw} radians in 200 ms`);
+    assert.ok(pull.to.input.steering > .08 && pull.to.input.steering < .20);
+    assert.equal(pull.to.input.touchSteering, true);
+    await contact(page, 'touchEnd', [finger]);
+    const lifted = await sample();
+    const { from, to } = lifted;
+    const lateral = -(to.player.x - from.player.x) * Math.sin(course) + (to.player.y - from.player.y) * Math.cos(course);
+    assert.deepEqual(to.input, neutral);
+    assert.ok(angleDifference(to.player.heading, from.player.heading) < 1e-6, 'lifting does not add yaw');
+    assert.ok(Math.abs(lateral) < 5, `residual lateral travel was ${lateral}`);
+    t.diagnostic(`15 px at cruise: ${(yaw * 180 / Math.PI).toFixed(2)}° per 200 ms; ${lateral.toFixed(2)} units lateral after lift`);
+    await shot(page, 'mobile-390-high-speed-neutral-after-lift');
+  });
+
+  await inBrowser('high-speed-hub-countersteer', { width: 390, height: 600, mobile: true }, async page => {
+    const { course, finger } = await cruise(page);
+    await contact(page, 'touchStart', [finger]);
+    for (const [dx, dy] of [[18, 0], [18, 4], [17, 8]]) {
+      await moveContacts(page, { ...finger, x: finger.x + dx, y: finger.y + dy });
+    }
+    await moveContacts(page, finger);
+    const centered = await snapshot(page);
+    assert.deepEqual(centered.input, neutral, 'a curved hub pull neutralizes at center without lifting');
+    verifyCenteredStick(centered);
+    const rightYaw = headingDelta(centered.drive.player.heading, course);
+    assert.ok(rightYaw > .035, 'the curved pull actually turned the car');
+    await moveContacts(page, { ...finger, x: finger.x + 8 });
+    assert.deepEqual((await snapshot(page)).input, neutral, 'the touch neutral band absorbs small horizontal motion');
+
+    await moveContacts(page, { ...finger, x: finger.x - 12, y: finger.y + 3 });
+    const opposite = await snapshot(page);
+    assert.ok(opposite.input.left && opposite.input.steering < -.025 && opposite.input.steering > -.14);
+    await shot(page, 'mobile-390-high-speed-countersteer');
+    await moveContacts(page, { ...finger, x: finger.x - 17, y: finger.y + 2 });
+    await poll(async () => {
+      const player = (await snapshot(page)).drive.player;
+      const heading = headingDelta(player.heading, course);
+      return heading < rightYaw - .03 && Math.abs(heading) < .035;
+    }, 'the opposite hub correction to recover the starting heading', 1800);
+    await moveContacts(page, finger);
+    await poll(async () => {
+      const { drive: { player } } = await snapshot(page);
+      return angleDifference(player.travelHeading, course) < .045;
+    }, 'the line of travel to recover with the hub neutral', 1800);
+    assert.deepEqual((await snapshot(page)).input, neutral);
+    await contact(page, 'touchEnd', [finger]);
+  });
+});
+
 test('390×600 wheel tracks full circles in both directions and unwinds from lock', { timeout: 26000 }, async () => {
   await inBrowser('mobile-wheel-arcs', { width: 390, height: 600, mobile: true }, async page => {
     await openMission(page, 'C1-01');
@@ -640,13 +714,7 @@ test('390×600 wheel tracks full circles in both directions and unwinds from loc
       return Math.atan2(position.x - wheel.x, wheel.y - position.y);
     };
     await contact(page, 'touchStart', [brake]);
-    let brakeSince = performance.now();
     async function moveTo(point) {
-      if (performance.now() - brakeSince > 600) {
-        await contact(page, 'touchEnd', [brake]);
-        await contact(page, 'touchStart', [brake]);
-        brakeSince = performance.now();
-      }
       await moveContacts(page, point);
       const view = await snapshot(page);
       assert.equal(view.input.brake, true);
@@ -690,43 +758,94 @@ test('390×600 wheel tracks full circles in both directions and unwinds from loc
     }
     await contact(page, 'touchStart', [wheel]);
     for (let degrees = 0; degrees <= 270; degrees += 15) await moveTo(rim(degrees));
-    assert.ok((await snapshot(page)).input.steering > .98, 'an arc can continue from a center grab');
+    assert.ok((await snapshot(page)).input.steering < -.98, 'a center grab keeps projecting horizontal displacement after a curved gesture');
+    const hubNeutral = await moveTo(wheel);
+    assert.deepEqual(hubNeutral.input, { ...neutral, brake: true });
     await contact(page, 'touchEnd');
     assert.deepEqual((await snapshot(page)).input, neutral);
   });
 });
 
-test('390×600 held brake waits at rest, reverses, and rolls through zero on lift', { timeout: 18000 }, async () => {
-  await inBrowser('mobile-reverse', { width: 390, height: 600, mobile: true }, async page => {
-    await openMission(page, 'C1-01');
-    await start(page);
-    const brake = await holdPoint(page, 'brake', 1);
-    await contact(page, 'touchStart', [brake]);
-    const stopped = await poll(async () => {
-      const view = await snapshot(page);
-      return view.input.brake && view.drive.player.speed === 0 && view.drive.player;
-    }, 'the mobile brake to reach a stop');
-    await shot(page, 'mobile-390-reverse-before');
-    await delay(650);
-    assert.deepEqual((await snapshot(page)).drive.player, stopped);
-    const progress = player => (player.x - stopped.x) * Math.cos(stopped.heading) + (player.y - stopped.y) * Math.sin(stopped.heading);
-    await poll(async () => {
-      const view = await snapshot(page);
-      return view.input.brake && view.drive.player.speed === -36 && progress(view.drive.player) < -12;
-    }, 'the held pedal to reverse the vehicle down the road');
-    await shot(page, 'mobile-390-reversing');
-    await contact(page, 'touchEnd', [brake]);
-    const rolling = await poll(async () => {
-      const view = await snapshot(page);
-      return !view.input.brake && view.drive.player.speed > -36 && view.drive.player.speed < 0 && view.drive.player;
-    }, 'continued backward roll on release');
-    const resumed = await poll(async () => {
-      const view = await snapshot(page);
-      return view.drive.player.speed > 0 && view.drive.player;
-    }, 'automatic forward acceleration after reversing');
-    assert.ok(progress(resumed) < progress(rolling), 'the car coasted backward before driving forward again');
+test('The canvas scopes selection and cancels the trusted context menu on the game surface', { timeout: 18000 }, async () => {
+  await inBrowser('canvas-selection', { width: 390, height: 600, mobile: true }, async page => {
+    const contract = await page.read(() => {
+      const canvas = document.querySelector('canvas');
+      document.addEventListener('contextmenu', event => {
+        if (event.target === canvas && event.isTrusted) setTimeout(() => {
+          window.observedCanvasMenu = { trusted: event.isTrusted, cancelable: event.cancelable, prevented: event.defaultPrevented };
+        }, 0);
+      }, { capture: true });
+      const fire = (target, type) => target.dispatchEvent(new Event(type, { bubbles: true, cancelable: true }));
+      const style = getComputedStyle(canvas);
+      return {
+        select: style.userSelect,
+        webkitSelect: style.webkitUserSelect,
+        touch: style.touchAction,
+        bodySelect: getComputedStyle(document.body).userSelect,
+        canvasSelectAllowed: fire(canvas, 'selectstart'),
+        bodySelectAllowed: fire(document.body, 'selectstart'),
+        bodyMenuAllowed: fire(document.body, 'contextmenu'),
+      };
+    });
+    const pointer = { x: 145, y: 314, button: 'right', clickCount: 1 };
+    await page.send('Input.dispatchMouseEvent', { ...pointer, type: 'mousePressed', buttons: 2 });
+    await page.send('Input.dispatchMouseEvent', { ...pointer, type: 'mouseReleased', buttons: 0 });
+    const menu = await poll(() => page.read(() => window.observedCanvasMenu), 'trusted canvas contextmenu');
+    assert.deepEqual({ ...contract, menu }, {
+      select: 'none', webkitSelect: 'none', touch: 'none', bodySelect: 'auto',
+      canvasSelectAllowed: false, bodySelectAllowed: true, bodyMenuAllowed: true,
+      menu: { trusted: true, cancelable: true, prevented: true },
+    });
+    // Blink does not expose Safari's callout property through computed styles.
+    const styleSource = await readFile(new URL('../../src/styles.css', import.meta.url), 'utf8');
+    assert.match(styleSource, /#stage\s*\{[^}]*-webkit-touch-callout:\s*none\s*;/);
   });
 });
+
+for (const [width, height] of [[390, 600], [320, 568]]) {
+  test(`${width}×${height} held brake stays stopped and allows a second steering finger`, { timeout: 18000 }, async () => {
+    await inBrowser(`mobile-brake-hold-${width}`, { width, height, mobile: true }, async page => {
+      await openMission(page, 'C1-01');
+      await start(page);
+      const brake = await holdPoint(page, 'brake', 1);
+      await poll(async () => (await snapshot(page)).drive.player.speed >= 90, 'forward speed before braking');
+      await contact(page, 'touchStart', [brake]);
+      const stopped = await poll(async () => {
+        const view = await snapshot(page);
+        return view.input.brake && view.drive.player.speed === 0 && view.drive.player;
+      }, 'the mobile brake to reach a stop');
+      await delay(1450);
+      let view = await snapshot(page);
+      assert.deepEqual(view.input, { ...neutral, brake: true });
+      assert.deepEqual(view.drive.player, stopped, 'the held pedal keeps the car parked');
+      assert.equal(await page.read(() => getSelection().toString()), '');
+      await shot(page, `mobile-${width}-long-brake-hold`);
+
+      const stick = await holdPoint(page, 'steer', 2);
+      await contact(page, 'touchStart', [stick]);
+      await moveContacts(page, { ...stick, x: stick.x + 23 });
+      view = await poll(async () => {
+        const scene = await snapshot(page);
+        return scene.input.brake && scene.input.touchSteering && headingDelta(scene.drive.player.heading, stopped.heading) > .09 && scene;
+      }, 'the second finger to pivot the nose right while keeping the brake held');
+      assert.deepEqual([view.drive.player.x, view.drive.player.y, view.drive.player.speed], [stopped.x, stopped.y, 0]);
+
+      if (width === 320) await contact(page, 'touchCancel');
+      else {
+        await contact(page, 'touchEnd', [stick]);
+        assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true });
+        await contact(page, 'touchEnd', [brake]);
+      }
+      await poll(async () => {
+        const scene = await snapshot(page);
+        return !scene.input.brake && scene.drive.player.speed > 0;
+      }, 'normal forward acceleration after release');
+      view = await snapshot(page);
+      assert.deepEqual(view.input, neutral);
+      verifyCenteredStick(view);
+    });
+  });
+}
 
 test('390×600 wheel turns progressively through light, middle and edge pulls', { timeout: 24000 }, async t => {
   await inBrowser('mobile-proportional-steering', { width: 390, height: 600, mobile: true }, async page => {
@@ -742,9 +861,6 @@ test('390×600 wheel turns progressively through light, middle and edge pulls', 
     await contact(page, 'touchStart', [stick]);
 
     async function measureTurn(dx, dy = 0) {
-      await contact(page, 'touchEnd', [brake]);
-      await contact(page, 'touchStart', [brake]);
-      await poll(async () => (await snapshot(page)).drive.player.speed === 0, 'stop between steering samples');
       await moveContacts(page, { ...stick, x: stick.x + dx, y: stick.y + dy });
       const sample = await page.read(async () => {
         const first = window.__getawayScene();
@@ -765,7 +881,7 @@ test('390×600 wheel turns progressively through light, middle and edge pulls', 
       return { rate: headingDelta(sample.endHeading, sample.startHeading) / sample.seconds, view: sample.view };
     }
 
-    const light = await measureTurn(10);
+    const light = await measureTurn(12);
     await shot(page, 'mobile-390-controls-slight');
     const middle = await measureTurn(22);
     const edge = await measureTurn(47);
@@ -837,8 +953,6 @@ test('390×600 touch steering crosses neutral and releases independently of the 
     assert.ok(steeringOffset(view).x > 30 && steeringOffset(view).x < right.x - stick.x);
     await shot(page, 'mobile-390-controls-steering-and-brake');
 
-    await contact(page, 'touchEnd', [brake]);
-    await contact(page, 'touchStart', [brake]);
     await moveContacts(page, stick);
     view = await snapshot(page);
     assert.deepEqual(view.input, { ...neutral, brake: true });
@@ -860,14 +974,14 @@ test('390×600 touch steering crosses neutral and releases independently of the 
     await moveContacts(page, right);
     await contact(page, 'touchEnd', [brake]);
     view = await snapshot(page);
-    assert.deepEqual(view.input, { ...neutral, right: true, steering: 1 });
+    assert.deepEqual(view.input, { ...neutral, right: true, steering: 1, touchSteering: true });
     assert.equal(object(view, 'held:brake').visible, false);
     assert.ok(steeringOffset(view).x > 30);
 
     const otherStick = { ...left, id: 1 };
     await contact(page, 'touchStart', [otherStick]);
     await moveContacts(page, { ...otherStick, x: otherStick.x - 8 });
-    assert.deepEqual((await snapshot(page)).input, { ...neutral, right: true, steering: 1 });
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, right: true, steering: 1, touchSteering: true });
     await contact(page, 'touchEnd', [right]);
     await moveContacts(page, { ...otherStick, x: otherStick.x + 70 });
     view = await snapshot(page);
@@ -884,7 +998,7 @@ test('390×600 touch steering crosses neutral and releases independently of the 
 
     await contact(page, 'touchStart', [brake, stick]);
     await moveContacts(page, right);
-    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true, steering: 1 });
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true, steering: 1, touchSteering: true });
     await contact(page, 'touchCancel');
     view = await snapshot(page);
     assert.deepEqual(view.input, neutral);
@@ -918,7 +1032,7 @@ test('Mobile driving releases captured controls on lost capture, pause, resize, 
       });
       await contact(page, 'touchStart', [stick]);
       await moveContacts(page, right);
-      assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true, steering: 1 });
+      assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true, steering: 1, touchSteering: true });
       return { brake, stick, right };
     }
 
@@ -1012,7 +1126,7 @@ test('Wider touch-capable driving offers the stick and brake and keeps keyboard 
     await contact(page, 'touchStart', [stick]);
     await moveContacts(page, { ...stick, x: stick.x - 23 });
     const touch = (await snapshot(page)).input;
-    assert.ok(touch.left && touch.brake && touch.steering > -.6 && touch.steering < -.4);
+    assert.ok(touch.left && touch.brake && touch.touchSteering && touch.steering > -.43 && touch.steering < -.34);
     await page.key('ArrowRight', 'rawKeyDown');
     assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true, steering: 1 });
     await page.key('ArrowLeft', 'rawKeyDown');
@@ -1098,7 +1212,6 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
 
 async function turnAcrossStreet(page, target, tolerance = .105) {
   const liftBrake = await holdBrake(page, false);
-  const keepBrake = keepBrakeFresh(page, false, liftBrake);
   await delay(110);
   const initial = (await snapshot(page)).drive.player.heading;
   const turn = Math.atan2(Math.sin(target - initial), Math.cos(target - initial));
@@ -1111,9 +1224,7 @@ async function turnAcrossStreet(page, target, tolerance = .105) {
   try {
     await poll(async () => {
       const view = await snapshot(page);
-      if (view.phase === 'driving' && angleDifference(view.drive.player.heading, target) < tolerance) return true;
-      await keepBrake();
-      return false;
+      return view.phase === 'driving' && angleDifference(view.drive.player.heading, target) < tolerance;
     }, `keyboard steering to ${target.toFixed(2)} radians`, 4200);
   } finally {
     await page.key(direction, 'keyUp');
