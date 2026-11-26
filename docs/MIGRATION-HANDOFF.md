@@ -1,25 +1,27 @@
-# Grand Theft Casual migration handoff
+# Getaway Total Accident migration handoff
+
+**Latest checkpoint.** Start with the [26 November PM handoff](HANDOFF-2026-11-26.md) for the accepted Pixi build, new-machine checks, portable evidence, and PM restart prompt. This page retains the earlier foundation snapshot.
 
 **Snapshot · 26 November 2026.** The PM accepted the first playable Chapter 1 foundation for Getaway Totally Accidental at `7579bc57b20d43908e83dd777badb2ce8d580e54`. The earlier repository baseline is `cd90038`. These revisions identify evidence from this milestone and help distinguish later changes. Use the new checkout’s actual revision and working tree when resuming.
 
 ## Bring up the new machine
 
-1. Install Git, a supported Node.js LTS with a built-in WebSocket client, and an installed Edge, Chrome, or Chromium for browser checks. Node 24 LTS provides the needed built-ins. The accepted run used Node 25.6.0 and Edge 158. The code runs directly from source with no npm install or third-party runtime dependencies. [Node release status](https://nodejs.org/en/about/previous-releases) · [Node WebSocket API](https://nodejs.org/download/release/v24.0.2/docs/api/globals.html#websocket)
-2. After the operator confirms the GitHub handoff, clone from the [repository](https://github.com/mcorcosa/getaway-total-accident). Open the checkout in Codex as the **Grand Theft Casual** sidebar project. Check GitHub and Pages access in the intended account. Credentials and connector authorization are machine or account setup.
-3. Follow the [build guide](chapter-1-build.md). Start `node scripts/serve.mjs`, open the printed loopback HTTP URL, run content and Node checks, and run the browser suite. The old machine’s port-4173 preview was a local process. The new checkout defaults to port 8080 and accepts a port override.
+1. Install Git, a supported Node.js LTS with the built-in WebSocket client, npm, and installed Edge, Chrome, or Chromium. The earlier foundation run used Node 25.6.0 and Edge 158. The revised Pixi checkpoint used Node 24.11.1, npm 11.6.2, and Edge 158.0.4370.33. [Build and verification guide](chapter-1-build.md)
+2. After the operator confirms the GitHub handoff, clone from the [repository](https://github.com/mcorcosa/getaway-total-accident). Open the checkout in the verified Codex sidebar project. The current local label is **Getaway Total Accident**. Check GitHub and Pages access in the intended account. Credentials and connector authorization are machine or account setup. [Verified project binding](team-roster.md#restored-local-routing)
+3. Run `npm ci` to install the locked PixiJS `8.23.0` dependency. Start `node scripts/serve.mjs`, open the printed loopback HTTP URL, and run the content, Node, and browser checks. The checkout defaults to port 8080 and accepts a port override. The original machine’s port-4173 preview was a local process. [Build guide](chapter-1-build.md)
 4. Read [AGENTS.md](../AGENTS.md), the [setup guide](ai-setup.md), the [working design](../HEATWAVE-GETAWAY-DESIGN.md), and the [team roster](team-roster.md). Use the [PM prompt](PROJECT-MANAGER-START-PROMPT.md) if recreating or resuming the PM role. Verify visible project membership and direct messaging before relying on any chat handoff.
 
 The clone carries tracked files and commits. Chat history, sidebar project bindings, connector sign-ins, browser storage, temporary mockups, and temporary QA screenshots have separate lifecycles. Check access on the new machine. The rebuild uses browser-local storage scoped to its HTTP origin, plus a separate key for `?fixture=1`. The legacy prototype keeps its existing save key. A fresh browser profile or a different port starts with separate progress.
 
-## Playable and verified
+## Earlier playable foundation and verification
 
-- **Current foundation.** [`index.html`](../index.html) loads 21 authored Canal Ward main missions and 21 optional bonus runs over HTTP. The build includes the scrollable Story map, a single pre-job postcard, driving HUD and pause, success and failure, Garage, and banking. Players start with one owned Starter Coupe. The eligibility rules are implemented and exercised by tests. Shop and Daily Missions have unavailable states, and Chapter 2 is unavailable. Platform SDK work is pending.
+- **First playable foundation.** [`index.html`](../index.html) loads 21 authored Canal Ward main missions and 21 optional bonus runs over HTTP. The foundation included the scrollable Story map, a single pre-job postcard, driving HUD and pause, success and failure, Garage, and banking. Players start with one owned Starter Coupe. The eligibility rules are implemented and exercised by tests. Shop and Daily Missions have unavailable states, and Chapter 2 is unavailable. Platform SDK work is pending.
 - **Legacy reference.** [`heatwave-getaway-prototype.html`](../heatwave-getaway-prototype.html) is the earlier four-job build with a Neon Strip free-drive preview. The PM verified its SHA-256 as `fafc9d4819b1dd45b0a8b4c80d5f2d9fdd39283a9778d353ff4fa62693952984` at acceptance. It is kept for historical comparison.
 - **Acceptance.** Content validation passed all 21 missions. The 15 runtime and authored-content tests include an uninterrupted steering and braking simulation of all 21 mains and 21 bonuses. Seven representative tests passed in installed Edge, exercising the opening missions, desktop and touch sizes, pause, reload, banking exactly once, bonus outcomes and carryover, target visibility, map wrapping, and menus. The final Home heading and focus spacing adjustment received a separate targeted visual check. This evidence covers the accepted playable foundation. Production art, final story, final balance, and driving feel are still open. [Build guide and evidence scope](chapter-1-build.md)
 
 ## Build structure and ownership
 
-- [`index.html`](../index.html), [`src/app.mjs`](../src/app.mjs), and [`src/styles.css`](../src/styles.css) are the browser entry, input loop, and styling. The UI and renderer live in [`src/ui.mjs`](../src/ui.mjs) and [`src/renderer.mjs`](../src/renderer.mjs).
+- [`index.html`](../index.html) hosts the canvas. [`src/app.mjs`](../src/app.mjs) boots local Pixi and connects input and the game loop. [`src/ui.mjs`](../src/ui.mjs) coordinates the scenes in [`src/pixi/`](../src/pixi/). [`src/renderer.mjs`](../src/renderer.mjs) holds the framing helper used by the existing Node tests.
 - [`src/game-state.mjs`](../src/game-state.mjs) owns run phases and payouts, [`src/simulation.mjs`](../src/simulation.mjs) owns driving and pursuit, and [`src/save.mjs`](../src/save.mjs) owns progress. [`src/vehicles.mjs`](../src/vehicles.mjs) applies category and tier eligibility. Engineering owns technical integration and acceptance.
 - [`src/content-loader.mjs`](../src/content-loader.mjs) and [`src/schema.mjs`](../src/schema.mjs) validate the authored boundary. Map owns [`src/content/world.json`](../src/content/world.json) and reusable spatial geometry. Level Design owns [`src/content/chapter1.json`](../src/content/chapter1.json) for objectives, spawn and marker placement, pursuits, and tuning. Treat placements, test payouts, patrol values, and bonus balance as tunable.
 - [`scripts/`](../scripts/) serves and validates content. [`tests/`](../tests/) holds runtime, authored-content, and browser acceptance checks. The [team roster](team-roster.md) identifies the accepted authors, review owners, and assignment boundaries.
@@ -41,9 +43,9 @@ The clone carries tracked files and commits. Chat history, sidebar project bindi
 
 ## Pages and visual references
 
-The existing Pages MCP Space is **Grand Theft Casual**, `page_space_d0625ed24de48191aae222a38f11211f`. It stores text-only knowledge. With the same authorized account, use `read_page` with the Page ID. Use `find_pages` with the Space ID to look up a topic.
+The Pages MCP Space **Getaway Total Accident** (`page_space_d0625ed24de48191aae222a38f11211f`) holds the project’s text-only knowledge. The original handoff used **Grand Theft Casual** for this Space. With the same authorized account, use `read_page` with the Page ID. Use `find_pages` with the Space ID to look up a topic.
 
-- [Start Here](https://chatgpt.com/space/page_6b07df28ba988191b1bc6bf6d032120e) · `page_6b07df28ba988191b1bc6bf6d032120e`
+- [Getaway Total Accident start page](https://chatgpt.com/space/page_6b07df28ba988191b1bc6bf6d032120e) · `page_6b07df28ba988191b1bc6bf6d032120e`
 - [Game Design](https://chatgpt.com/space/page_0f74c2901b5081919928bcfcadc04eb2) · `page_0f74c2901b5081919928bcfcadc04eb2`
 - [Confirmed Decisions and Open Questions](https://chatgpt.com/space/page_d992c8842f1881918a640576e66e8c4b) · `page_d992c8842f1881918a640576e66e8c4b`
 

@@ -4,9 +4,9 @@ Use this guide to start a project with separate chats for ownership, management,
 
 ## Moving or restoring the project
 
-On a new machine or checkout, read the [migration handoff](MIGRATION-HANDOFF.md) and verify the current workspace and exact **Grand Theft Casual** sidebar project. Use the [PM startup prompt](PROJECT-MANAGER-START-PROMPT.md) to restore a missing PM chat. The [team roster](team-roster.md) describes role startup and the registry for verified active routes. Its original-host IDs are provenance until the current checkout, project binding, and direct messaging are verified.
+On a new machine or checkout, read the [migration handoff](MIGRATION-HANDOFF.md) and verify the current workspace and exact sidebar project binding for **Getaway Total Accident**. Use the [PM startup prompt](PROJECT-MANAGER-START-PROMPT.md) to restore a missing PM chat. The [team roster](team-roster.md) describes role startup and the registry for verified active routes. Its original-host IDs are provenance until the current checkout, project binding, and direct messaging are verified.
 
-## Grand Theft Casual shared knowledge
+## Getaway Total Accident shared knowledge
 
 Before planning, dispatching, implementing, or reviewing project work, read the Pages MCP [start page](https://chatgpt.com/space/page_6b07df28ba988191b1bc6bf6d032120e), [Confirmed Decisions and Open Questions](https://chatgpt.com/space/page_d992c8842f1881918a640576e66e8c4b), and the relevant parts of [Game Design](https://chatgpt.com/space/page_0f74c2901b5081919928bcfcadc04eb2).
 
@@ -53,7 +53,7 @@ Every spawned project chat at every level, including managers, implementers, and
 
 The chat creator and every manager delegating to the chat must explicitly select the same sidebar project as the owner's project chat. Before relying on the handoff, they must verify that the chat appears in that project and can be opened and messaged directly. If a check fails, correct the mismatch and verify again, or pause the handoff and escalate to the PM. The PM escalates unresolved blockers to the owner. A parent workspace, sibling source checkout, hidden subagent, or link alone does not satisfy the rule.
 
-For this project, select **Grand Theft Casual** in the sidebar for all manager, implementer, specialist, and Librarian chats.
+For this project, verify the exact sidebar project ID and checkout for all manager, implementer, specialist, and Librarian chats. The current local sidebar label is **Getaway Total Accident**. The original project and several existing chat titles use **Grand Theft Casual**. See the [team roster](team-roster.md) for the verified binding and routing approvals.
 
 1. For each distinct implementation assignment, the area manager creates a fresh, named, user-visible project chat. Choose the chat's reasoning effort using [Model selection](#model-selection). Revisions to the same assignment may stay with its named Sol owner.
 2. Before any implementation changes, give the implementer a written handoff in the named chat. Record the actual implementer chat ID or link, exact model and reasoning effort, expected outcome, scope, owned paths, constraints, acceptance criteria and checks, and reporting destination. Identify the workspace or branch when it matters. Assign clear ownership before starting parallel work that could touch the same files. If the required Sol chat is missing or delegation is unavailable, hold implementation and escalate the blocker to the PM. The PM escalates unresolved blockers to the owner.

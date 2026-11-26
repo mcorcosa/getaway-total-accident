@@ -1,0 +1,123 @@
+import { button, clamp, colors, graphics, group, icon, panel, text } from './primitives.mjs';
+import { liveWorld } from './world-view.mjs';
+
+function hudBlock(root, label, x, y, w, h, tint, symbol) {
+  const box = group(root, `hud:${label}`, x, y);
+  panel(box, 0, 0, w, h, 0x101c36, 0x507496, 9, .97).label = `hud-panel:${label}`;
+  panel(box, 7, 8, 27, 26, 0x182d48, 0x395574, 7);
+  icon(box, symbol, 20.5, 21, 16, tint);
+  text(box, label.toUpperCase(), 42, 5, { size: 9, color: tint, spacing: .5, weight: '800' });
+  return box;
+}
+
+export function showDrive(parent, drive, { width, height }, controls) {
+  const world = group(parent, 'driving-world');
+  const hud = group(parent, 'driving-hud');
+  const footer = group(parent, 'driving-controls');
+  const compact = width < 680;
+  const gutter = compact ? 8 : 18;
+  const gap = 6;
+  const usable = width - gutter * 2;
+  const row = 43;
+  const barWidth = Math.min(usable, 840);
+  const left = (width - barWidth) / 2;
+  const pauseW = 47;
+  const objectiveW = compact ? barWidth - pauseW - gap : Math.floor(barWidth * .5);
+  const meterW = compact ? (barWidth - gap) / 2 : (barWidth - objectiveW - pauseW - gap * 3) / 2;
+  const meterY = gutter + (compact ? row + gap : 0);
+  const meterX = left + (compact ? 0 : objectiveW + gap);
+  const objective = hudBlock(hud, 'Objective', left, gutter, objectiveW, row, colors.gold, 'destination');
+  const marker = objective.getChildByLabel('icon:destination');
+  const pickup = icon(objective, 'pickup', 20.5, 21, 16, colors.gold);
+  const objectiveText = text(objective, '', 42, 19, {
+    size: compact ? 13 : 15, width: objectiveW - 48, label: 'objective-text',
+  });
+  const incidentText = text(objective, '', 42, 30, {
+    size: compact ? 10 : 11, color: 0xffca9a, label: 'objective-incident',
+  });
+  incidentText.visible = false;
+  const damage = hudBlock(hud, 'Car damage', meterX, meterY, meterW, row, colors.aqua, 'damage');
+  const heat = hudBlock(hud, 'Heat', meterX + meterW + gap, meterY, meterW, row, 0xff9cd0, 'heat');
+  const pips = Array.from({ length: drive.vehicle.maxDamage }, (_, i) => {
+    const span = Math.min(15, (meterW - 49) / drive.vehicle.maxDamage);
+    return graphics(damage, `condition:${i}`).roundRect(42 + i * span, 22, span - 2.5, 9, 2.5);
+  });
+  const stars = Array.from({ length: 5 }, (_, i) => {
+    const span = Math.min(18, (meterW - 47) / 5);
+    return graphics(heat, `heat-star:${i}`).star(48 + i * span, 26, 5, Math.min(6, span * .45), Math.min(3, span * .23));
+  });
+  button(hud, controls, {
+    id: 'drive:pause', name: 'Pause', action: 'pause', glyph: 'pause', x: left + barWidth - pauseW, y: gutter, w: pauseW, h: row,
+  });
+
+  const bottom = height - (compact ? 12 : 20);
+  const keyY = bottom - 48;
+  const footerTop = compact ? keyY : keyY - 23;
+  if (!compact) {
+    panel(footer, width / 2 - 228, footerTop - 2, 456, 18, 0x0e1a32, undefined, 6, .9);
+    text(footer, 'Steer with ← / → or A / D. Brake with Space, ↓ or S. Esc pauses.',
+      width / 2, footerTop + 7, { size: 12, center: true, color: colors.faded, label: 'drive-help' });
+  }
+  const w = clamp((width - 38) / 3, 64, 110);
+  const bx = width / 2 - w / 2;
+  const xPositions = [gutter + 3, bx, width - w - gutter - 3];
+  const holds = ['left', 'brake', 'right'].map((id, i) => {
+    const names = { left: 'Steer left', brake: 'Brake', right: 'Steer right' };
+    const control = button(footer, controls, {
+      id: `drive:${id}`, name: names[id], caption: id === 'brake' ? 'Brake' : undefined,
+      drive: id, glyph: id === 'brake' ? undefined : id, x: xPositions[i], y: keyY, w, h: 48,
+    });
+    const active = graphics(control.node, `held:${id}`).roundRect(1, 1, w - 2, 46, 9)
+      .fill({ color: colors.aqua, alpha: .27 }).stroke({ color: colors.aqua, width: 2 });
+    active.visible = false;
+    return { id, active };
+  });
+  const drawScene = liveWorld(world, drive, width, height, { hudBottom: meterY + row, footerTop });
+  let lastDamage;
+  let lastHeat;
+  let lastObjective;
+  let lastIncident;
+  return held => {
+    drawScene();
+    const collecting = Boolean(drive.segment.objective.pickup && !drive.pickedUp);
+    marker.visible = !collecting;
+    pickup.visible = collecting;
+    const goal = collecting ? 'Pick up the package' : 'Reach the marker';
+    if (goal !== lastObjective) {
+      objectiveText.text = goal;
+      lastObjective = goal;
+    }
+    const incident = drive.incidentTime > 0 ? drive.incident : '';
+    if (incident !== lastIncident) {
+      incidentText.text = incident;
+      incidentText.visible = Boolean(incident);
+      objectiveText.y = incident ? 14 : 19;
+      objectiveText.style.fontSize = incident ? (compact ? 12 : 13) : (compact ? 13 : 15);
+      objectiveText.style.lineHeight = incident ? 15 : compact ? 16 : 18;
+      if (incident) {
+        incidentText.scale.x = 1;
+        incidentText.scale.x = Math.min(1, (objectiveW - 48) / incidentText.width);
+      }
+      lastIncident = incident;
+    }
+    if (lastDamage !== drive.damage) {
+      // Reapply paths when the fill changes so there is one real pip object per condition point.
+      for (const [i, shape] of pips.entries()) {
+        const span = Math.min(15, (meterW - 49) / pips.length);
+        shape.clear().roundRect(42 + i * span, 22, span - 2.5, 9, 2.5)
+          .fill(i < drive.damage ? colors.aqua : 0x273752).stroke({ color: 0x42738a, width: .7 });
+      }
+      lastDamage = drive.damage;
+    }
+    const level = drive.patrol ? 1 : 0;
+    if (lastHeat !== level) {
+      for (const [i, shape] of stars.entries()) {
+        const span = Math.min(18, (meterW - 47) / 5);
+        shape.clear().star(48 + i * span, 26, 5, Math.min(6, span * .45), Math.min(3, span * .23))
+          .fill(i < level ? colors.pink : 0x22314d).stroke({ color: i < level ? 0xffb7d8 : 0x7585a2, width: .85 });
+      }
+      lastHeat = level;
+    }
+    for (const { id, active } of holds) active.visible = Boolean(held[id]);
+  };
+}

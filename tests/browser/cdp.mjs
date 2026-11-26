@@ -100,11 +100,12 @@ export async function launchBrowser() {
   assert.ok(basename(profile).startsWith(profilePrefix));
   const child = spawn(executable, [
     '--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-background-networking',
+    '--enable-unsafe-swiftshader',
     `--user-data-dir=${profile}`, `--remote-debugging-address=${host}`, '--remote-debugging-port=0', 'about:blank',
   ], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
   let stderr = '';
   child.stderr.setEncoding('utf8').on('data', chunk => { stderr = (stderr + chunk).slice(-3000); });
-  const exit = once(child, 'close').then(([code, signal]) => ({ code, signal }), error => ({ error }));
+  const exit = once(child, 'exit').then(([code, signal]) => ({ code, signal }), error => ({ error }));
   let stopped;
   void exit.then(result => { stopped = result; });
   let connection;
@@ -114,12 +115,13 @@ export async function launchBrowser() {
       await connection.send('Browser.close').catch(() => {});
       connection.close();
     }
-    if (!stopped) await Promise.race([exit, delay(2000, undefined, { ref: false })]);
+    if (!stopped) await Promise.race([exit, delay(5000, undefined, { ref: false })]);
     if (!stopped) {
       child.kill();
       await Promise.race([exit, delay(2000)]);
     }
     assert.ok(stopped, `Headless browser process ${child.pid} did not exit`);
+    child.stderr.destroy();
     const removalPath = await realpath(profile);
     assert.equal(dirname(removalPath), tempRoot, 'Browser profile resolved outside the temp directory');
     assert.equal(removalPath, profile, 'Browser profile resolved to a different path');
@@ -133,7 +135,7 @@ export async function launchBrowser() {
       try {
         address = await readFile(join(profile, 'DevToolsActivePort'), 'utf8');
       } catch (error) {
-        if (error.code === 'ENOENT') return undefined;
+        if (['ENOENT', 'EBUSY', 'EPERM'].includes(error.code)) return undefined;
         throw error;
       }
       const [port, endpointPath] = address.trim().split(/\r?\n/);
@@ -163,7 +165,7 @@ export async function launchBrowser() {
 }
 
 const keys = {
-  ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39, Escape: 27, Tab: 9,
+  ArrowDown: 40, ArrowLeft: 37, ArrowRight: 39, ArrowUp: 38, Enter: 13, Escape: 27, Space: 32, Tab: 9,
 };
 
 export async function openPage(connection, url, { width = 1200, height = 800, mobile = false } = {}) {
@@ -226,17 +228,17 @@ export async function openPage(connection, url, { width = 1200, height = 800, mo
       return result.result.value;
     }
 
-    async function center(selector) {
-      return read(selector => {
-        const node = document.querySelector(selector);
-        if (!node) throw new Error(`Missing control ${selector}`);
-        const box = node.getBoundingClientRect();
-        if (!box.width || !box.height) throw new Error(`Hidden control ${selector}`);
-        const x = box.left + box.width / 2;
-        const y = box.top + box.height / 2;
-        if (!node.contains(document.elementFromPoint(x, y))) throw new Error(`Obscured control ${selector}`);
+    async function center(id) {
+      return read(id => {
+        const scene = window.__getawayScene();
+        const control = scene.controls.find(item => item.id === id);
+        if (!control?.visible) throw new Error(`Hidden or missing control ${id}`);
+        const box = control.bounds;
+        const x = box.x + box.width / 2;
+        const y = box.y + box.height / 2;
+        if (document.elementFromPoint(x, y) !== document.querySelector('canvas')) throw new Error(`Control ${id} is outside the canvas`);
         return { x, y };
-      }, selector);
+      }, id);
     }
 
     async function click(selector, count = 1) {
@@ -250,8 +252,10 @@ export async function openPage(connection, url, { width = 1200, height = 800, mo
     async function key(code, type, modifiers = 0) {
       const virtualKey = keys[code];
       assert.ok(virtualKey, `Missing CDP mapping for ${code}`);
+      const text = code === 'Enter' && type === 'rawKeyDown' ? '\r' : undefined;
       await send('Input.dispatchKeyEvent', {
-        type, code, key: code, windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey, modifiers,
+        type: text ? 'keyDown' : type, code, key: code, text, unmodifiedText: text,
+        windowsVirtualKeyCode: virtualKey, nativeVirtualKeyCode: virtualKey, modifiers,
       });
     }
 
@@ -260,12 +264,25 @@ export async function openPage(connection, url, { width = 1200, height = 800, mo
       await key(code, 'keyUp', modifiers);
     }
 
-    async function screenshot(path) {
+    async function pixels() {
       const result = await send('Page.captureScreenshot', { format: 'png', fromSurface: true });
-      await writeFile(path, Buffer.from(result.data, 'base64'));
+      return Buffer.from(result.data, 'base64');
     }
 
-    return { send, read, center, click, key, press, screenshot, close, errors, responses };
+    async function screenshot(path) {
+      await writeFile(path, await pixels());
+    }
+
+    async function background() {
+      const other = await connection.send('Target.createTarget', { url: 'about:blank', browserContextId });
+      await connection.send('Target.activateTarget', { targetId: other.targetId });
+      return async () => {
+        await connection.send('Target.closeTarget', { targetId: other.targetId });
+        await send('Page.bringToFront');
+      };
+    }
+
+    return { send, read, center, click, key, press, pixels, screenshot, background, close, errors, responses, requests };
   } catch (error) {
     try {
       await close();

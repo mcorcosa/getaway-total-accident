@@ -1,366 +1,321 @@
-import { paintDistrict, paintDrive, paintInset } from './renderer.mjs';
+import { Rectangle } from '/vendor/pixi.mjs';
 import { startDrive } from './simulation.mjs';
-import { eligibleVehicles, vehicles } from './vehicles.mjs';
+import { vehicles } from './vehicles.mjs';
+import { showCard } from './pixi/card.mjs';
+import { showDrive } from './pixi/drive.mjs';
+import { showMenu } from './pixi/menu.mjs';
+import { button, clamp, clear, colors, graphics, group, panel, text } from './pixi/primitives.mjs';
 
-const money = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
-const menuPhases = ['home', 'garage', 'shop', 'daily'];
-const drivingPhases = ['driving', 'pause', 'success', 'failure', 'bonus-briefing'];
-const teachingMissions = new Set([0, 3, 8, 13]);
-const nodeOffsets = [24, 52, 12, 40, 6, 33, 51, 15];
-const failureMessages = {
-  wrecked: 'The car was wrecked.',
-  busted: 'The patrol caught up and stopped you.',
-  'balance-limit': 'Your balance reached the save limit.',
-};
+const menus = new Set(['home', 'garage', 'shop', 'daily']);
+const dialogs = new Set(['briefing', 'pause', 'success', 'failure', 'bonus-briefing']);
+const escapeAction = { driving: 'pause', pause: 'resume', briefing: 'home', 'bonus-briefing': 'cancel-bonus', failure: 'home' };
+const statusInput = new WeakMap();
 
-function element(tag, text, className) {
-  const item = document.createElement(tag);
-  if (text) item.textContent = text;
-  if (className) item.className = className;
-  return item;
+export function statusScene(app, title, detail, fixtureLink) {
+  const { width, height } = app.screen;
+  const previous = statusInput.get(app);
+  previous?.events.abort();
+  clear(app.stage);
+  app.stage.eventMode = 'static';
+  app.stage.hitArea = new Rectangle(0, 0, width, height);
+  text(app.stage, title, 18, Math.min(height * .16, 72), {
+    size: clamp(width * .061, 22, 37), width: width - 36, label: 'loading-title',
+  });
+  if (detail) text(app.stage, detail, 18, Math.min(height * .16, 72) + 81, {
+    size: 15, width: Math.min(width - 36, 570), color: colors.faded,
+  });
+  if (fixtureLink) {
+    const x = 18;
+    const y = height - 83;
+    const w = Math.min(252, width - 36);
+    const { node } = button(app.stage, [], {
+      id: 'open-fixture', name: 'Open engineering fixture', caption: 'Open engineering fixture',
+      primary: 'aqua', x, y, w, h: 44,
+    });
+    const ring = graphics(app.stage, 'fixture-focus').roundRect(x - 3, y - 3, w + 6, 50, 10)
+      .stroke({ width: 2, color: colors.aqua });
+    ring.visible = Boolean(previous?.focused);
+    const events = new AbortController();
+    const options = { signal: events.signal };
+    const state = { events, focused: ring.visible };
+    statusInput.set(app, state);
+    function showFocus(focused) {
+      state.focused = ring.visible = focused;
+      app.render();
+    }
+    const open = () => location.assign('?fixture=1');
+    node.on('pointertap', open);
+    app.canvas.addEventListener('keydown', event => {
+      if (event.code === 'Tab' && !state.focused) {
+        event.preventDefault();
+        showFocus(true);
+      } else if (state.focused && (event.code === 'Enter' || event.code === 'Space')) {
+        event.preventDefault();
+        if (!event.repeat) open();
+      }
+    }, options);
+    app.canvas.addEventListener('blur', () => showFocus(false), options);
+    if (!previous) app.canvas.focus({ preventScroll: true });
+  }
+  app.render();
 }
 
-function setText(node, text) {
-  if (node.textContent !== text) node.textContent = text;
-}
-
-function button(label, action, secondary = false) {
-  const control = element('button', label, secondary ? 'secondary' : '');
-  control.type = 'button';
-  control.dataset.action = action;
-  return control;
-}
-
-export function gameUI(content, game, act) {
-  const byId = id => document.getElementById(id);
+export function gameUI(app, content, textures, game, effects) {
+  const { stage, canvas } = app;
   const { state } = game;
-  const { chapter, fixture } = content;
-  const menu = byId('menu');
-  const menuContext = byId('menu-context');
-  const menuTitle = byId('menu-title');
-  const completion = byId('menu-completion');
-  const menuBank = byId('menu-bank');
-  const detail = byId('menu-detail');
-  const scroll = byId('route-scroll');
-  const route = byId('route-map');
-  const mapPath = byId('map-path');
-  const list = byId('mission-list');
-  const play = byId('play');
-  const stage = byId('stage');
-  const objective = byId('objective');
-  const hud = byId('driving-hud');
-  const footer = byId('play-footer');
-  const objectiveIcon = byId('hud-objective-icon');
-  const damage = byId('hud-damage');
-  const heat = byId('hud-heat');
-  const dialog = byId('postcard');
-  const label = byId('card-label');
-  const title = byId('card-title');
-  const copy = byId('card-copy');
-  const instruction = byId('card-instruction');
-  const inset = byId('teaching-inset');
-  const field = byId('vehicle-field');
-  const select = byId('vehicle-select');
-  const locked = byId('vehicle-locked');
-  const actions = byId('card-actions');
-  let leadingCopy;
-  let trailingCopy;
-  let tileHeight = 0;
-  let scrollOffset = 0;
-  let lastPhase;
-  let lastMissionId;
-  let lastCleared = -1;
-  let recentlyCleared = false;
+  const scroll = { offset: 0, period: 0 };
+  const swipe = new Set();
+  let drag;
+  let previous;
+  let lastMission;
+  let knownClear = -1;
+  let map;
+  let drawDrive;
+  let controls;
+  let focus = null;
+  let focusRing;
+  let vehicleOpen = false;
+  let notice = '';
+  let wasCleared = false;
   let staticDrive;
 
-  function copyMap() {
-    const duplicate = route.cloneNode(true);
-    duplicate.removeAttribute('id');
-    duplicate.setAttribute('aria-hidden', 'true');
-    for (const node of duplicate.querySelectorAll('[id]')) node.removeAttribute('id');
-    for (const control of duplicate.querySelectorAll('button')) control.tabIndex = -1;
-    return duplicate;
+  function focusCanvas() {
+    if (document.activeElement !== canvas) canvas.focus({ preventScroll: true });
   }
 
-  function layoutLoop() {
-    const height = route.offsetHeight;
-    if (!height || !leadingCopy) return;
-    const bounds = route.getBoundingClientRect();
-    const points = [...route.querySelectorAll('.node-number, .route-end')].map(node => {
-      const box = node.getBoundingClientRect();
-      return { x: box.left + box.width / 2 - bounds.left, y: box.top + box.height / 2 - bounds.top };
-    });
-    paintDistrict(mapPath, points);
-    for (const duplicate of [leadingCopy, trailingCopy]) {
-      const canvas = duplicate.querySelector('canvas');
-      canvas.width = mapPath.width;
-      canvas.height = mapPath.height;
-      canvas.getContext('2d').drawImage(mapPath, 0, 0);
-    }
-    if (tileHeight !== height) {
-      tileHeight = height;
-      scroll.scrollTop = height + scrollOffset % height;
-    }
+  function drawFocus() {
+    focusRing.clear();
+    if (document.activeElement !== canvas) return;
+    const control = controls.find(item => item.id === focus);
+    if (!control?.node.visible) return;
+    const area = control.node.hitArea;
+    const start = control.node.toGlobal({ x: 0, y: 0 });
+    const end = control.node.toGlobal({ x: area.width, y: area.height });
+    focusRing.roundRect(start.x - 2.5, start.y - 2.5, end.x - start.x + 5, end.y - start.y + 5, 10)
+      .stroke({ color: colors.aqua, width: 2.5 });
   }
 
-  function buildMap() {
-    const { cleared } = state.progress;
-    leadingCopy?.remove();
-    trailingCopy?.remove();
-    tileHeight = 0;
-    list.replaceChildren();
-    chapter.missions.forEach((mission, index) => {
-      const row = element('li');
-      const status = index < cleared.length ? 'replay' : index === cleared.length ? 'play' : 'locked';
-      const control = button('', 'open');
-      control.className = 'mission-button';
-      control.style.setProperty('--offset', `${nodeOffsets[index % nodeOffsets.length]}%`);
-      control.dataset.status = status;
-      control.dataset.mission = mission.id;
-      control.disabled = status === 'locked';
-      if (status === 'play') control.setAttribute('aria-current', 'step');
-      const nodeNumber = element('span', String(index + 1), 'node-number');
-      const description = element('span', mission.title);
-      description.append(element('span', { replay: 'Replay', play: 'Play', locked: 'Locked' }[status], 'node-status'));
-      control.append(nodeNumber, description);
-      row.append(control);
-      list.append(row);
-    });
-    if (!fixture) {
-      const row = element('li');
-      row.append(element('span', 'Neon Strip · Unavailable', 'route-end'));
-      list.append(row);
-    }
-    leadingCopy = copyMap();
-    trailingCopy = copyMap();
-    route.before(leadingCopy);
-    route.after(trailingCopy);
-    lastCleared = cleared.length;
+  function focusOn(id, reveal = false) {
+    focus = id;
+    const control = controls.find(item => item.id === id);
+    if (reveal && control?.reveal && control.node.eventMode !== 'static') control.reveal();
+    drawFocus();
+    effects.invalidate();
   }
 
-  scroll.addEventListener('scroll', () => {
-    if (!tileHeight || scroll.hidden || state.phase !== 'home') return;
-    const position = scroll.scrollTop;
-    if (position < tileHeight) scroll.scrollTop = position + tileHeight;
-    if (position >= tileHeight * 2) scroll.scrollTop = position - tileHeight;
-    scrollOffset = scroll.scrollTop - tileHeight;
-  }, { passive: true });
-  scroll.addEventListener('mousedown', event => {
-    if (event.target.closest('[aria-hidden="true"] button')) event.preventDefault();
-  });
-  new ResizeObserver(layoutLoop).observe(route);
+  function chooseVehicle(value) {
+    vehicleOpen = false;
+    effects.act('vehicle', value);
+    focusOn('vehicle-picker');
+  }
 
-  function renderMenu(phase) {
-    const { cleared } = state.progress;
-    const complete = !fixture && cleared.length === chapter.missions.length;
-    completion.hidden = phase !== 'home' || !complete;
-    menuBank.textContent = money.format(state.progress.bank);
-    menuBank.setAttribute('aria-label', `Bank balance ${money.format(state.progress.bank)}`);
-    menuTitle.textContent = ({ home: fixture ? chapter.title : 'Palmera Bay', garage: 'Garage', shop: 'Shop', daily: 'Daily Missions' })[phase];
-    menuContext.textContent = phase === 'home' && !fixture ? `Story · ${chapter.title}` : 'Getaway Totally Accidental';
-    for (const control of menu.querySelectorAll('.bottom-menu button')) {
-      if (control.dataset.action === phase) control.setAttribute('aria-current', 'page');
-      else control.removeAttribute('aria-current');
-    }
-    scroll.hidden = phase !== 'home';
-    detail.hidden = phase === 'home';
-    if (phase === 'home') {
-      const unlocked = recentlyCleared || (lastCleared >= 0 && cleared.length > lastCleared);
-      if (lastCleared !== cleared.length) buildMap();
-      layoutLoop();
-      scroll.scrollTop = tileHeight + scrollOffset;
-      const controls = [...list.querySelectorAll('button')];
-      const prior = controls.find(control => control.dataset.mission === lastMissionId);
-      if (unlocked) {
-        const next = controls[cleared.length] ?? controls.at(-1);
-        const offset = next.getBoundingClientRect().top - route.getBoundingClientRect().top;
-        scrollOffset = Math.max(0, offset - scroll.clientHeight / 3);
-        scroll.scrollTop = tileHeight + scrollOffset;
-        (complete ? completion : next).focus({ preventScroll: true });
-        recentlyCleared = false;
-        return;
-      }
-      const restore = ['briefing', 'success', 'failure', 'driving', 'pause'].includes(lastPhase) && prior;
-      (restore || menuTitle).focus({ preventScroll: true });
+  function toggleVehicle() {
+    vehicleOpen = !vehicleOpen;
+    show(true);
+    const option = vehicleOpen && controls.find(item => item.role === 'option' && item.selected);
+    focusOn(option ? option.id : 'vehicle-picker');
+  }
+
+  function activate(control) {
+    if (control?.enter) control.enter();
+    else if (control?.action) effects.act(control.action, control.value);
+  }
+
+  function bindControl(control) {
+    if (!control.enabled) return;
+    const { node } = control;
+    if (vehicleOpen && control.role !== 'option' && control.role !== 'combobox') {
+      node.eventMode = 'none';
       return;
     }
-    detail.replaceChildren();
-    if (phase === 'garage') {
-      for (const id of state.progress.ownedVehicleIds) {
-        const vehicle = vehicles[id];
-        const car = element('article', '', 'garage-car');
-        car.append(element('h2', vehicle.name),
-          element('p', `Tier ${vehicle.tier} · ${vehicle.category} · ${vehicle.maxDamage} condition pips`));
-        detail.append(car);
-      }
-    } else {
-      detail.append(element('p', phase === 'shop' ? 'The Shop is currently unavailable.' : 'Daily Missions are currently unavailable.'));
-    }
-    menuTitle.focus({ preventScroll: true });
-  }
-
-  function showVehicle(run) {
-    const options = eligibleVehicles(run.mission, state.progress.ownedVehicleIds);
-    field.hidden = false;
-    const choice = run.mission.allowVehicleSelection && !run.mission.stolenVehicleId && options.length > 0;
-    select.hidden = !choice;
-    field.querySelector('label').hidden = !choice;
-    locked.hidden = choice;
-    if (choice) {
-      select.replaceChildren(...options.map(id => {
-        const option = element('option', `${vehicles[id].name} · Tier ${vehicles[id].tier}`);
-        option.value = id;
-        return option;
-      }));
-      select.value = run.vehicleId;
-    } else {
-      locked.textContent = run.vehicleId ? `${vehicles[run.vehicleId].name} · Tier ${vehicles[run.vehicleId].tier}` :
-        'No eligible owned vehicle is available.';
+    if (control.drive) {
+      node.on('pointerdown', e => {
+        if (e.button !== 0 || state.phase !== 'driving') return;
+        focusCanvas();
+        effects.hold(e.pointerId, control.drive);
+      });
+    } else if (control.action || control.enter) {
+      node.on('pointertap', e => {
+        if (e.button !== 0 || swipe.delete(e.pointerId)) return;
+        focusCanvas();
+        activate(control);
+      });
     }
   }
 
-  function renderPostcard(phase) {
-    dialog.dataset.phase = phase;
-    const { run, failure } = state;
-    let card;
-    field.hidden = true;
-    inset.hidden = true;
-    instruction.hidden = true;
-    if (phase === 'briefing' || phase === 'bonus-briefing') {
-      const bonus = phase === 'bonus-briefing';
-      const segment = bonus ? run.mission.bonus : run.mission;
-      card = {
-        label: 'Nina',
-        title: bonus ? 'Bonus run' : run.mission.title,
-        copy: segment.flavour.replace(/^Nina:\s*/i, ''),
-        actions: bonus ? [['Start Bonus', 'start'], ['Back to Success', 'cancel-bonus']] : [['Play', 'start'], ['Story', 'home']],
-      };
-      instruction.hidden = false;
-      instruction.textContent = segment.instructions.replace(/^Nina:\s*/i, '');
-      dialog.setAttribute('aria-describedby', 'card-copy card-instruction');
-      if (!bonus) {
-        showVehicle(run);
-        inset.hidden = !teachingMissions.has(chapter.missions.indexOf(run.mission)) || !run.vehicleId;
-      }
-    } else {
-      dialog.setAttribute('aria-describedby', 'card-copy');
-      if (phase === 'success') {
-        card = {
-          label: 'Mission result', title: 'Job complete',
-          copy: `You have ${money.format(run.haul)} in the car. Bank it now or take one bonus run.`,
-          actions: [['Continue to Story', 'bank'], ['Bonus', 'bonus']],
-        };
-      } else if (phase === 'failure') {
-        const loss = failure.lost ? ` You lost ${money.format(failure.lost)}.` : '';
-        const clear = failure.bonus ? ' Your main job is still complete.' : '';
-        card = {
-          label: 'Mission result', title: 'Job failed',
-          copy: `${failureMessages[failure.reason]}${loss}${clear}`,
-          actions: [['Replay', 'replay'], ['Back to menu', 'home']],
-        };
-      } else {
-        card = {
-          label: '', title: 'Paused',
-          copy: 'Leaving ends this attempt.',
-          actions: [['Resume', 'resume'], ['Back to menu', 'home']],
-        };
-      }
-    }
-    label.hidden = !card.label;
-    label.textContent = card.label;
-    title.textContent = card.title;
-    copy.textContent = card.copy;
-    actions.replaceChildren(...card.actions.map(([text, action], index) => button(text, action, index > 0)));
-    if (phase === 'briefing' && !run.vehicleId) actions.firstElementChild.disabled = true;
-    if (!dialog.open) dialog.showModal();
-    if (!inset.hidden) paintInset(inset, game.mapFor(run.mission.id), run.mission, vehicles[run.vehicleId]);
-    title.focus({ preventScroll: true });
-  }
-
-  function draw() {
-    const { run } = state;
-    const drive = run?.drive ?? staticDrive;
-    if (!drive || play.hidden) return;
-    const collecting = drive.segment.objective.pickup && !drive.pickedUp;
-    const goal = collecting ? 'Pick up the package' : 'Reach the marker';
-    const incident = drive.incidentTime > 0 ? drive.incident : '';
-    setText(objectiveIcon, collecting ? '✉' : '⌂');
-    setText(objective, incident ? `${goal} · ${incident}` : goal);
-    const condition = drive.vehicle.maxDamage;
-    setText(damage, `${'■'.repeat(drive.damage)}${'□'.repeat(condition - drive.damage)}`);
-    damage.setAttribute('aria-label', `${drive.damage} of ${condition} condition pips`);
-    setText(heat, drive.patrol ? '★☆☆☆☆' : '☆☆☆☆☆');
-    heat.setAttribute('aria-label', drive.patrol ? 'Heat 1 of 5' : 'Heat 0 of 5');
-    paintDrive(stage, drive, { hudBottom: hud.getBoundingClientRect().bottom, footerTop: footer.getBoundingClientRect().top });
-  }
-
-  function render() {
+  function show(preserve = false) {
     const { phase, run } = state;
-    if (phase === lastPhase) return;
-    document.body.dataset.phase = phase;
+    const size = { width: app.screen.width, height: app.screen.height };
     if (run) {
-      lastMissionId = run.mission.id;
-      recentlyCleared ||= run.firstClear;
+      lastMission = run.mission.id;
+      wasCleared ||= run.firstClear;
     }
-    if (menuPhases.includes(phase)) {
-      if (dialog.open) dialog.close();
-      menu.hidden = false;
-      play.hidden = true;
-      renderMenu(phase);
+    if (phase !== previous && phase !== 'briefing') vehicleOpen = false;
+    clear(stage);
+    stage.eventMode = 'static';
+    stage.hitArea = new Rectangle(0, 0, size.width, size.height);
+    controls = [];
+    map = null;
+    drawDrive = null;
+
+    if (menus.has(phase)) {
+      const root = group(stage, `menu:${phase}`);
+      map = showMenu(root, textures, content, phase, state.progress, size, controls, scroll);
     } else {
-      menu.hidden = phase !== 'briefing';
-      play.hidden = !drivingPhases.includes(phase);
-      staticDrive = null;
-      if (!play.hidden && !run.drive) {
-        staticDrive = startDrive(run.mission, game.mapFor(run.mission.id), vehicles[run.vehicleId], run.damage);
+      if (phase !== 'briefing') {
+        if (!run.drive && (!staticDrive || phase !== previous && previous === 'home')) {
+          staticDrive = startDrive(run.mission, game.mapFor(run.mission.id), vehicles[run.vehicleId], run.damage);
+        }
+        const drive = run.drive ?? staticDrive;
+        const base = group(stage, 'drive-scene');
+        drawDrive = showDrive(base, drive, size, phase === 'driving' ? controls : []);
+        if (phase !== 'driving') base.eventMode = 'none';
       }
-      if (phase === 'driving') {
-        if (dialog.open) dialog.close();
-        stage.focus({ preventScroll: true });
-      } else {
-        renderPostcard(phase);
+      if (dialogs.has(phase)) {
+        const root = group(stage, `dialog:${phase}`);
+        showCard(root, textures, content, game, size, controls, { vehicleOpen, toggleVehicle, chooseVehicle });
       }
-      draw();
     }
-    lastPhase = phase;
+
+    controls.forEach(bindControl);
+    const noticeLayer = group(stage, 'save-status');
+    if (notice) {
+      const width = Math.min(size.width - 16, 400);
+      const x = size.width - width - 8;
+      const copy = text(noticeLayer, notice, x + 10, 9, { size: 13, width: width - 20, label: 'save-notice' });
+      const backing = panel(noticeLayer, x, 4, width, copy.height + 12, 0x231833, colors.gold, 7);
+      noticeLayer.setChildIndex(backing, 0);
+    }
+    focusRing = graphics(stage, 'keyboard-focus');
+    if (phase !== previous && !preserve) focus = null;
+    if (map) {
+      const count = state.progress.cleared.length;
+      const initial = knownClear < 0;
+      const newlyCleared = wasCleared || (!initial && count > knownClear);
+      const active = controls.find(item => item.status === 'play') ?? controls.filter(item => item.action === 'open').at(-1);
+      if (initial || newlyCleared) {
+        active?.reveal();
+        if (newlyCleared) focus = count === content.chapter.missions.length ? 'story-map' : active?.id;
+      } else if (!preserve && ['briefing', 'failure', 'pause', 'success'].includes(previous)) {
+        focus = `mission:${lastMission}`;
+      }
+      knownClear = count;
+      wasCleared = false;
+    }
+    if (!controls.some(item => item.id === focus)) focus = null;
+    if (focus) focusOn(focus, true);
+    previous = phase;
+    if (phase === 'driving' || dialogs.has(phase)) focusCanvas();
+    draw(effects.input());
+    // Commit the new screen before subsequent pointer events can hit it.
+    effects.present();
   }
 
-  document.addEventListener('click', event => {
-    const control = event.target.closest('button[data-action]');
-    if (control) act(control.dataset.action, control.dataset.mission);
-  });
-  select.addEventListener('change', () => {
-    if (act('vehicle', select.value) && !inset.hidden) {
-      const { run } = state;
-      paintInset(inset, game.mapFor(run.mission.id), run.mission, vehicles[run.vehicleId]);
-    }
-  });
-  dialog.addEventListener('cancel', event => {
-    event.preventDefault();
-    const escape = { pause: 'resume', briefing: 'home', 'bonus-briefing': 'cancel-bonus', failure: 'home' }[state.phase];
-    if (escape) act(escape);
-  });
-  dialog.addEventListener('keydown', event => {
-    if (event.key !== 'Tab') return;
-    const controls = [...dialog.querySelectorAll('button:not(:disabled), select')]
-      .filter(node => !node.hidden && !node.closest('[hidden]'));
-    const first = controls[0];
-    const last = controls.at(-1);
-    if (event.shiftKey && (document.activeElement === first || document.activeElement === title)) {
-      event.preventDefault();
-      last?.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first?.focus();
-    }
-  });
-  new ResizeObserver(() => {
-    draw();
-    if (!inset.hidden && state.run) {
-      const { run } = state;
-      paintInset(inset, game.mapFor(run.mission.id), run.mission, vehicles[run.vehicleId]);
-    }
-  }).observe(stage);
+  function draw(input) {
+    drawDrive?.(input);
+    effects.invalidate();
+  }
 
-  return { render, draw };
+  function visibleControls() {
+    return controls.filter(item => {
+      if (!item.enabled) return false;
+      if (vehicleOpen) return item.role === 'option';
+      return true;
+    });
+  }
+
+  function shiftMap(delta) {
+    if (!map) return;
+    map.position(scroll.offset + delta);
+    drawFocus();
+    effects.invalidate();
+  }
+
+  function key(event) {
+    const { code, repeat } = event;
+    if (code === 'Escape' && vehicleOpen) {
+      if (!repeat) toggleVehicle();
+      return true;
+    }
+    if (code === 'Escape' && escapeAction[state.phase]) {
+      if (!repeat) effects.act(escapeAction[state.phase]);
+      return true;
+    }
+    const enabled = visibleControls();
+    const current = enabled.findIndex(item => item.id === focus);
+    const control = enabled[current];
+    if (code === 'Tab') {
+      if (!enabled.length) return false;
+      const change = event.shiftKey ? -1 : 1;
+      const initial = event.shiftKey ? enabled.length - 1 : 0;
+      if (!dialogs.has(state.phase) && current >= 0 && (current + change < 0 || current + change >= enabled.length)) {
+        focusOn(null);
+        return false;
+      }
+      const index = current < 0 ? initial : (current + change + enabled.length) % enabled.length;
+      focusOn(enabled[index].id, true);
+      return true;
+    }
+    if (vehicleOpen && ['ArrowUp', 'ArrowDown'].includes(code) && enabled.length) {
+      const next = (current + (code === 'ArrowUp' ? -1 : 1) + enabled.length) % enabled.length;
+      focusOn(enabled[next].id);
+      return true;
+    }
+    if (control?.role === 'tab' && ['ArrowLeft', 'ArrowRight'].includes(code)) {
+      const tabs = enabled.filter(item => item.role === 'tab');
+      const i = tabs.indexOf(control);
+      focusOn(tabs[(i + (code === 'ArrowLeft' ? -1 : 1) + tabs.length) % tabs.length].id);
+      return true;
+    }
+    if (map && (!control || control.role === 'region')) {
+      const deltas = { ArrowUp: -65, ArrowDown: 65, PageUp: -app.screen.height * .7, PageDown: app.screen.height * .7 };
+      if (deltas[code]) {
+        shiftMap(deltas[code]);
+        return true;
+      }
+    }
+    if ((code === 'Space' || code === 'Enter') && control) {
+      if (control.drive && state.phase === 'driving') effects.press(code, control.drive, repeat);
+      else if (!repeat) activate(control);
+      return true;
+    }
+    return false;
+  }
+
+  stage.on('pointerdown', e => {
+    swipe.delete(e.pointerId);
+    if (map && !drag && e.button === 0 && e.global.y < app.screen.height - 58) {
+      focusCanvas();
+      drag = { start: e.global.y, last: e.global.y, id: e.pointerId };
+      effects.capture(e.pointerId);
+    }
+  });
+  stage.on('globalpointermove', e => {
+    if (!drag || drag.id !== e.pointerId) return;
+    if (swipe.has(e.pointerId) || Math.abs(e.global.y - drag.start) >= 7) {
+      swipe.add(e.pointerId);
+      shiftMap(drag.last - e.global.y);
+      drag.last = e.global.y;
+    }
+  });
+
+  function release(id) {
+    if (drag?.id === id) drag = undefined;
+  }
+
+  canvas.addEventListener('wheel', event => {
+    if (!map || event.ctrlKey) return;
+    event.preventDefault();
+    const multiplier = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? app.screen.height : 1;
+    shiftMap(event.deltaY * multiplier);
+  }, { passive: false });
+  canvas.addEventListener('focus', () => { if (focusRing) drawFocus(); effects.invalidate(); });
+  canvas.addEventListener('blur', () => { if (focusRing) drawFocus(); effects.invalidate(); });
+
+  return {
+    show, draw, key, release,
+    cancel() { drag = undefined; swipe.clear(); },
+    notice(value) { notice = value; },
+    observation: () => ({ controls, focus, scroll, modal: dialogs.has(state.phase) ? state.phase : null }),
+  };
 }

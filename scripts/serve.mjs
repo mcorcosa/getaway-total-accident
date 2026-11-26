@@ -2,21 +2,25 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-const types = { html: 'text/html', css: 'text/css', mjs: 'text/javascript', json: 'application/json' };
+const types = {
+  html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8',
+  mjs: 'text/javascript; charset=utf-8', json: 'application/json; charset=utf-8', jpg: 'image/jpeg',
+};
 
 export function gameServer() {
   return createServer(async (request, response) => {
     const pathname = request.url.split('?')[0];
-    const file = pathname === '/' ? 'index.html' : pathname.slice(1);
-    const allowed = /^(?:index\.html|src\/(?:[\w-]+\/)*[\w-]+\.(?:mjs|css|json))$/.test(file);
-    if (!allowed || !['GET', 'HEAD'].includes(request.method)) {
+    const vendor = pathname === '/vendor/pixi.mjs';
+    const file = vendor ? 'node_modules/pixi.js/dist/pixi.min.mjs' : pathname === '/' ? 'index.html' : pathname.slice(1);
+    const allowed = /^(?:index\.html|src\/(?:[\w-]+\/)*[\w-]+\.(?:mjs|css|json)|assets\/ui\/(?:palmera-bay|postcards\/(?:first-job|canal-ward|success|bonus))\.jpg)$/.test(file);
+    if ((!vendor && !allowed) || !['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(404).end('Not found');
       return;
     }
     try {
       const data = await readFile(new URL(`../${file}`, import.meta.url));
       response.writeHead(200, {
-        'Content-Type': `${types[file.split('.').at(-1)]}; charset=utf-8`,
+        'Content-Type': types[file.split('.').at(-1)],
         'Cache-Control': 'no-store',
         'X-Content-Type-Options': 'nosniff',
       }).end(request.method === 'HEAD' ? undefined : data);

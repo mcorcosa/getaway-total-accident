@@ -1,10 +1,12 @@
-# Getaway Totally Accidental game design
+# Getaway Total Accident game design
 
-**Working design.** Getaway Totally Accidental is a top-down arcade driving comedy about Nina and Ray, a criminal couple trying to make one big score in Palmera Bay with a series of very bad plans. Drive a short job, reach a safehouse, and decide whether to bank the take or risk it on another job. Banked money opens new areas and buys cars that change how you play.
+**Working design.** Getaway Total Accident is a top-down arcade driving comedy about Nina and Ray, a criminal couple trying to make one big score in Palmera Bay with a series of very bad plans. Drive a short job, reach a safehouse, and decide whether to bank the take or risk it on another job. Banked money opens new areas and buys cars that change how you play.
 
-The Chapter 1 rebuild is the current playable foundation. Start it through local HTTP with `node scripts/serve.mjs`, then open `http://127.0.0.1:8080/`. It loads the 21 authored Canal Ward missions. The first three are straight-to-marker jobs, followed by practice with steering, pickup, and pursuit. See the [Chapter 1 build guide](docs/chapter-1-build.md) for controls and checks.
+The owner confirmed the current game name on 26 November 2026 in PM chat `01a2175b-11c4-7230-9b26-0216587bad64`, message `01a217bf-40d2-7ca1-950b-6f166c34226d`.
 
-Story dialogue is placeholder copy, and art is provisional. The Garage starts with one owned Starter Coupe. Shop, Daily Missions, and Chapter 2 are unavailable. Platform SDK work, final balance, and driving feel remain open.
+The accepted Pixi Chapter 1 build carries forward the 21 authored Canal Ward missions. The first three are straight-to-marker jobs, followed by practice with steering, pickup, and pursuit. Run `npm ci`, then start `node scripts/serve.mjs` and open `http://127.0.0.1:8080/`. [Chapter 1 build guide](docs/chapter-1-build.md) · [26 November PM handoff](docs/HANDOFF-2026-11-26.md)
+
+Story dialogue is placeholder copy, and production art remains open. The Garage starts with one owned Starter Coupe. Shop, Daily Missions, and Chapter 2 are unavailable. Platform SDK work, final balance, and driving feel remain open.
 
 The [legacy four-job prototype](heatwave-getaway-prototype.html) remains available, with full-paying replays, one optional bonus per run, and a purchasable Neon Strip free-drive preview. It uses its original save. The rebuild stores progress separately.
 
@@ -137,6 +139,10 @@ The working finale keeps the choice to bank and leave town or risk the haul on R
 **Story is Home.** Players scroll through the chapters and city map to find and replay missions. Show Nina and Ray's current chapter, the bank balance, and the next district's cost when relevant. Group missions by district in story order. Cleared missions remain visible with a short objective, normal payout, best banked payout, **Replay**, and a **Recap** of Nina and Ray's exchange. The next available job offers **Continue**. Locked jobs show which job comes before them. On return after a clear, select the next available job.
 
 **Story map.** Use the full-bleed illustrated Palmera Bay map with a winding dotted path, numbered mission nodes, a district unlock on the path, and a bottom menu. The same map content must scroll vertically and join seamlessly at the loop. The approved reference is screenshot 2 in the owner’s 26 November 2026 correction in the Art Director chat, message `01a21712-9f74-7eb0-84c6-6776e61d6062`.
+
+**Story map and menus implementation.** On 26 November 2026 the owner reconfirmed the migrated Story map reference and directed the PM to bring the Story map and menus into line with the applicable mockups. Both instructions are in the restored Art Director chat `01a2177b-4f09-7483-90bc-3687ed8c70b1`, in messages `01a2178e-b46e-7883-b73c-d1de6315c816` and `01a21797-e38f-75e3-aed2-b5a550050e8c`. The earlier browser review of the Story/Home map and shared bottom navigation established visual fidelity for the HTML-based snapshot. The approved mockup and reviewed visuals guide the Pixi implementation. [Confirmed Story map reference](assets/references/story-map-approved.png) · [Browser review evidence](docs/chapter-1-build.md#story-map-and-shared-navigation-review)
+
+**Presentation renderer.** On 26 November 2026 the owner required the map, controls, and all game presentation to be rendered entirely in Pixi, with HTML used solely to host the canvas. This includes the world, teaching inset, shared navigation, postcards, HUD, pause, and secondary menus. The decision is in PM chat `01a2175b-11c4-7230-9b26-0216587bad64`, message `01a217b1-3321-76d1-b8ca-b2b469fdd3c2`. Engineering, Art, and the PM accepted the revised Pixi build after technical verification and the desktop joins, illustration framing, and compact HUD revisions. The HTML-based work is preserved as historical evidence. [Checkpoint and review evidence](docs/HANDOFF-2026-11-26.md#current-implementation-and-evidence)
 
 Home provides access to the separate **Garage** screen, balance, **Shop**, **Daily Missions**, and other menu entries. The Garage shows owned vehicles. Shop and Daily Missions are confirmed Home entries. Their destination scope is open. Garage visual design is deferred.
 
