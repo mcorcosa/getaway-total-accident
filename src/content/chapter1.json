@@ -1,0 +1,574 @@
+{
+  "version": 1,
+  "id": "chapter-1",
+  "title": "Canal Ward",
+  "missions": [
+    {
+      "id": "C1-01",
+      "title": "Reach the Marker",
+      "flavour": "I’ve marked a spot up the street.",
+      "instructions": "The car accelerates on its own. Let it drive straight into the marker.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west"],
+      "spawn": { "x": 128, "y": 350, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 128, "y": 224, "radius": 24 }
+      },
+      "payout": 100,
+      "bonus": {
+        "flavour": "One more stop on this street.",
+        "instructions": "Drive straight to the next marker.",
+        "spawn": { "x": 128, "y": 206, "heading": -1.5707963267948966 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 128, "y": 138, "radius": 24 }
+        },
+        "payout": 50
+      }
+    },
+    {
+      "id": "C1-02",
+      "title": "Same Goal, New Street",
+      "flavour": "Try the same move one street over.",
+      "instructions": "Drive straight to the marker.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-east"],
+      "spawn": { "x": 448, "y": 340, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 448, "y": 222, "radius": 24 }
+      },
+      "payout": 100,
+      "bonus": {
+        "flavour": "One more stop on this street.",
+        "instructions": "Drive straight to the next marker.",
+        "spawn": { "x": 448, "y": 204, "heading": -1.5707963267948966 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 448, "y": 138, "radius": 24 }
+        },
+        "payout": 50
+      }
+    },
+    {
+      "id": "C1-03",
+      "title": "Down the Block",
+      "flavour": "The next marker is farther down the block.",
+      "instructions": "Keep the wheel straight until you reach the marker.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west"],
+      "spawn": { "x": 128, "y": 392, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 128, "y": 224, "radius": 24 }
+      },
+      "payout": 100,
+      "bonus": {
+        "flavour": "One more stop on this street.",
+        "instructions": "Drive straight to the next marker.",
+        "spawn": { "x": 128, "y": 242, "heading": 1.5707963267948966 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 128, "y": 322, "radius": 24 }
+        },
+        "payout": 50
+      }
+    },
+    {
+      "id": "C1-04",
+      "title": "First Bend",
+      "flavour": "The garage is just around the bend.",
+      "instructions": "Brake before the bend, then steer right and drive to the garage marker.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-north"],
+      "spawn": { "x": 128, "y": 302, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 288, "y": 128, "radius": 24 }
+      },
+      "payout": 125,
+      "bonus": {
+        "flavour": "One more stop on this street.",
+        "instructions": "Drive straight to the next marker.",
+        "spawn": { "x": 306, "y": 128, "heading": 0 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 380, "y": 128, "radius": 24 }
+        },
+        "payout": 50
+      }
+    },
+    {
+      "id": "C1-05",
+      "title": "Left Turn",
+      "flavour": "This street takes you to the other end of the garage block.",
+      "instructions": "Brake before the bend, then steer left and drive to the garage marker.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-east", "canal-north"],
+      "spawn": { "x": 448, "y": 306, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 288, "y": 128, "radius": 24 }
+      },
+      "payout": 125,
+      "bonus": {
+        "flavour": "One more stop on this street.",
+        "instructions": "Drive straight to the next marker.",
+        "spawn": { "x": 270, "y": 128, "heading": 3.141592653589793 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 196, "y": 128, "radius": 24 }
+        },
+        "payout": 50
+      }
+    },
+    {
+      "id": "C1-06",
+      "title": "Right Turn",
+      "flavour": "The next garage is around the right bend.",
+      "instructions": "Brake before the bend, then steer right and drive to the garage marker.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-east", "canal-north"],
+      "spawn": { "x": 278, "y": 128, "heading": 0 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 448, "y": 290, "radius": 24 }
+      },
+      "payout": 125,
+      "bonus": {
+        "flavour": "One more stop on this street.",
+        "instructions": "Drive straight to the next marker.",
+        "spawn": { "x": 448, "y": 308, "heading": 1.5707963267948966 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 448, "y": 386, "radius": 24 }
+        },
+        "payout": 50
+      }
+    },
+    {
+      "id": "C1-07",
+      "title": "Two Streets",
+      "flavour": "Both sides of the block lead to the garage.",
+      "instructions": "At the T-junction, turn left or right. Follow that side of the block to the north garage.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-east", "canal-north", "canal-south", "canal-entry"],
+      "spawn": { "x": 288, "y": 546, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 288, "y": 128, "radius": 24 }
+      },
+      "payout": 125,
+      "bonus": {
+        "flavour": "One more stop on this street.",
+        "instructions": "Drive straight to the next marker.",
+        "spawn": { "x": 306, "y": 128, "heading": 0 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 380, "y": 128, "radius": 24 }
+        },
+        "payout": 50
+      }
+    },
+    {
+      "id": "C1-08",
+      "title": "Other Approach",
+      "flavour": "You’re on the other side of the same garage.",
+      "instructions": "Drive straight to the east garage from the south.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-east"],
+      "spawn": { "x": 448, "y": 414, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 448, "y": 290, "radius": 24 }
+      },
+      "payout": 125,
+      "bonus": {
+        "flavour": "One more stop on this street.",
+        "instructions": "Drive straight to the next marker.",
+        "spawn": { "x": 448, "y": 272, "heading": -1.5707963267948966 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 448, "y": 194, "radius": 24 }
+        },
+        "payout": 50
+      }
+    },
+    {
+      "id": "C1-09",
+      "title": "First Pickup",
+      "flavour": "There’s a package before the bend.",
+      "instructions": "Collect the marked package, then turn left and reach the west safehouse.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-north"],
+      "spawn": { "x": 294, "y": 128, "heading": 3.141592653589793 },
+      "objective": {
+        "kind": "pickup-delivery",
+        "pickup": { "x": 220, "y": 128, "radius": 18 },
+        "destination": { "x": 128, "y": 326, "radius": 24 }
+      },
+      "payout": 150,
+      "bonus": {
+        "flavour": "There’s another stop around the corner.",
+        "instructions": "Head north, turn right at the bend, and reach the marker.",
+        "spawn": { "x": 128, "y": 308, "heading": -1.5707963267948966 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 228, "y": 128, "radius": 24 }
+        },
+        "payout": 75
+      }
+    },
+    {
+      "id": "C1-10",
+      "title": "Straight Pickup",
+      "flavour": "The package and safehouse are on the same street.",
+      "instructions": "Drive straight through the package marker, then continue to the west safehouse.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-north"],
+      "spawn": { "x": 128, "y": 194, "heading": 1.5707963267948966 },
+      "objective": {
+        "kind": "pickup-delivery",
+        "pickup": { "x": 128, "y": 256, "radius": 18 },
+        "destination": { "x": 128, "y": 326, "radius": 24 }
+      },
+      "payout": 150,
+      "bonus": {
+        "flavour": "There’s another stop around the corner.",
+        "instructions": "Head north, turn right at the bend, and reach the marker.",
+        "spawn": { "x": 128, "y": 308, "heading": -1.5707963267948966 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 228, "y": 128, "radius": 24 }
+        },
+        "payout": 75
+      }
+    },
+    {
+      "id": "C1-11",
+      "title": "Pickup After Left",
+      "flavour": "The package is just past the left bend.",
+      "instructions": "Turn left, collect the marked package, and keep straight to the west safehouse.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-north"],
+      "spawn": { "x": 354, "y": 128, "heading": 3.141592653589793 },
+      "objective": {
+        "kind": "pickup-delivery",
+        "pickup": { "x": 128, "y": 256, "radius": 18 },
+        "destination": { "x": 128, "y": 326, "radius": 24 }
+      },
+      "payout": 150,
+      "bonus": {
+        "flavour": "There’s another stop around the corner.",
+        "instructions": "Head north, turn right at the bend, and reach the marker.",
+        "spawn": { "x": 128, "y": 308, "heading": -1.5707963267948966 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 228, "y": 128, "radius": 24 }
+        },
+        "payout": 75
+      }
+    },
+    {
+      "id": "C1-12",
+      "title": "Pickup After Right",
+      "flavour": "This time the package is past the right bend.",
+      "instructions": "Turn right, collect the marked package, and keep straight to the west safehouse.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-south"],
+      "spawn": { "x": 280, "y": 448, "heading": 3.141592653589793 },
+      "objective": {
+        "kind": "pickup-delivery",
+        "pickup": { "x": 128, "y": 382, "radius": 18 },
+        "destination": { "x": 128, "y": 326, "radius": 24 }
+      },
+      "payout": 150,
+      "bonus": {
+        "flavour": "There’s another stop on the south street.",
+        "instructions": "Head south, turn left at the bend, and reach the marker.",
+        "spawn": { "x": 128, "y": 344, "heading": 1.5707963267948966 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 228, "y": 448, "radius": 24 }
+        },
+        "payout": 75
+      }
+    },
+    {
+      "id": "C1-13",
+      "title": "Second Safehouse",
+      "flavour": "Same pickup, different drop-off.",
+      "instructions": "Collect the package on the west street, then turn left at the south bend and reach the south safehouse.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-south"],
+      "spawn": { "x": 128, "y": 194, "heading": 1.5707963267948966 },
+      "objective": {
+        "kind": "pickup-delivery",
+        "pickup": { "x": 128, "y": 256, "radius": 18 },
+        "destination": { "x": 228, "y": 448, "radius": 24 }
+      },
+      "payout": 150,
+      "bonus": {
+        "flavour": "There’s another stop around the corner.",
+        "instructions": "Head west, turn right at the bend, and reach the marker.",
+        "spawn": { "x": 210, "y": 448, "heading": 3.141592653589793 },
+        "objective": {
+          "kind": "delivery",
+          "destination": { "x": 128, "y": 354, "radius": 24 }
+        },
+        "payout": 75
+      }
+    },
+    {
+      "id": "C1-14",
+      "title": "First Pursuit",
+      "flavour": "A patrol is already behind you.",
+      "instructions": "Turn left at the bend and reach the north garage before the patrol catches you.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-east", "canal-north"],
+      "spawn": { "x": 448, "y": 306, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 288, "y": 128, "radius": 24 }
+      },
+      "payout": 175,
+      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "bonus": {
+        "flavour": "There’s another package on the north street.",
+        "instructions": "Collect the package, then turn right and deliver it to the east garage.",
+        "spawn": { "x": 306, "y": 128, "heading": 0 },
+        "objective": {
+          "kind": "pickup-delivery",
+          "pickup": { "x": 370, "y": 128, "radius": 18 },
+          "destination": { "x": 448, "y": 290, "radius": 24 }
+        },
+        "payout": 100
+      }
+    },
+    {
+      "id": "C1-15",
+      "title": "Second Garage",
+      "flavour": "Take the car back to the east garage.",
+      "instructions": "Turn right at the bend and reach the east garage before the patrol catches you.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-east", "canal-north"],
+      "spawn": { "x": 278, "y": 128, "heading": 0 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 448, "y": 290, "radius": 24 }
+      },
+      "payout": 175,
+      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "bonus": {
+        "flavour": "There’s a package on your way to the next garage.",
+        "instructions": "Collect the package on the east street, then turn left and reach the north garage.",
+        "spawn": { "x": 448, "y": 272, "heading": -1.5707963267948966 },
+        "objective": {
+          "kind": "pickup-delivery",
+          "pickup": { "x": 448, "y": 220, "radius": 18 },
+          "destination": { "x": 288, "y": 128, "radius": 24 }
+        },
+        "payout": 100
+      }
+    },
+    {
+      "id": "C1-16",
+      "title": "Two Ways Out",
+      "flavour": "You know both ways around this block.",
+      "instructions": "At the T-junction take either side of the block and reach the north garage before the patrol catches you.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-east", "canal-north", "canal-south", "canal-entry"],
+      "spawn": { "x": 288, "y": 546, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 288, "y": 128, "radius": 24 }
+      },
+      "payout": 175,
+      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "bonus": {
+        "flavour": "There’s one more package on this block.",
+        "instructions": "Pick up the package on the north street, then turn left toward the west safehouse.",
+        "spawn": { "x": 270, "y": 128, "heading": 3.141592653589793 },
+        "objective": {
+          "kind": "pickup-delivery",
+          "pickup": { "x": 216, "y": 128, "radius": 18 },
+          "destination": { "x": 128, "y": 326, "radius": 24 }
+        },
+        "payout": 100
+      }
+    },
+    {
+      "id": "C1-17",
+      "title": "Different Start",
+      "flavour": "The garage is just ahead from here.",
+      "instructions": "Drive straight to the north garage before the patrol catches you.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-north"],
+      "spawn": { "x": 210, "y": 128, "heading": 0 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 288, "y": 128, "radius": 24 }
+      },
+      "payout": 175,
+      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "bonus": {
+        "flavour": "There’s one more package on this block.",
+        "instructions": "Pick up the package on the north street, then turn left toward the west safehouse.",
+        "spawn": { "x": 270, "y": 128, "heading": 3.141592653589793 },
+        "objective": {
+          "kind": "pickup-delivery",
+          "pickup": { "x": 216, "y": 128, "radius": 18 },
+          "destination": { "x": 128, "y": 326, "radius": 24 }
+        },
+        "payout": 100
+      }
+    },
+    {
+      "id": "C1-18",
+      "title": "Delivery Revisited",
+      "flavour": "You’ve turned this corner before.",
+      "instructions": "Turn right at the bend and reach the north garage before the patrol catches you.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-north"],
+      "spawn": { "x": 128, "y": 302, "heading": -1.5707963267948966 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 288, "y": 128, "radius": 24 }
+      },
+      "payout": 175,
+      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "bonus": {
+        "flavour": "There’s one more package on this block.",
+        "instructions": "Pick up the package on the north street, then turn left toward the west safehouse.",
+        "spawn": { "x": 270, "y": 128, "heading": 3.141592653589793 },
+        "objective": {
+          "kind": "pickup-delivery",
+          "pickup": { "x": 216, "y": 128, "radius": 18 },
+          "destination": { "x": 128, "y": 326, "radius": 24 }
+        },
+        "payout": 100
+      }
+    },
+    {
+      "id": "C1-19",
+      "title": "Quiet Delivery",
+      "flavour": "The east garage is open again.",
+      "instructions": "Follow the south street, then turn left toward the east garage.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-east", "canal-south"],
+      "spawn": { "x": 310, "y": 448, "heading": 0 },
+      "objective": {
+        "kind": "delivery",
+        "destination": { "x": 448, "y": 290, "radius": 24 }
+      },
+      "payout": 150,
+      "bonus": {
+        "flavour": "One package, then the south safehouse.",
+        "instructions": "Collect the package on the east street, then turn right and reach the south safehouse.",
+        "spawn": { "x": 448, "y": 308, "heading": 1.5707963267948966 },
+        "objective": {
+          "kind": "pickup-delivery",
+          "pickup": { "x": 448, "y": 372, "radius": 18 },
+          "destination": { "x": 228, "y": 448, "radius": 24 }
+        },
+        "payout": 100
+      }
+    },
+    {
+      "id": "C1-20",
+      "title": "Familiar Pickup",
+      "flavour": "The package is back before the bend.",
+      "instructions": "Collect the package on the north street, then turn left to reach the west safehouse.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-north"],
+      "spawn": { "x": 294, "y": 128, "heading": 3.141592653589793 },
+      "objective": {
+        "kind": "pickup-delivery",
+        "pickup": { "x": 220, "y": 128, "radius": 18 },
+        "destination": { "x": 128, "y": 326, "radius": 24 }
+      },
+      "payout": 150,
+      "bonus": {
+        "flavour": "There’s another package just up the street.",
+        "instructions": "Collect the package, then keep straight to the marker.",
+        "spawn": { "x": 128, "y": 308, "heading": -1.5707963267948966 },
+        "objective": {
+          "kind": "pickup-delivery",
+          "pickup": { "x": 128, "y": 260, "radius": 18 },
+          "destination": { "x": 128, "y": 212, "radius": 24 }
+        },
+        "payout": 100
+      }
+    },
+    {
+      "id": "C1-21",
+      "title": "Pickup Under Pursuit",
+      "flavour": "A patrol is following you on the pickup route.",
+      "instructions": "Collect the package, then turn left and reach the west safehouse before the patrol catches you.",
+      "minTier": 1,
+      "defaultVehicleId": "starter-coupe",
+      "allowVehicleSelection": true,
+      "mapPieceIds": ["canal-west", "canal-north"],
+      "spawn": { "x": 294, "y": 128, "heading": 3.141592653589793 },
+      "objective": {
+        "kind": "pickup-delivery",
+        "pickup": { "x": 220, "y": 128, "radius": 18 },
+        "destination": { "x": 128, "y": 326, "radius": 24 }
+      },
+      "payout": 200,
+      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "bonus": {
+        "flavour": "There’s another package just up the street.",
+        "instructions": "Collect the package, then keep straight to the marker.",
+        "spawn": { "x": 128, "y": 308, "heading": -1.5707963267948966 },
+        "objective": {
+          "kind": "pickup-delivery",
+          "pickup": { "x": 128, "y": 260, "radius": 18 },
+          "destination": { "x": 128, "y": 212, "radius": 24 }
+        },
+        "payout": 100
+      }
+    }
+  ]
+}

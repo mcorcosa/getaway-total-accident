@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "pieces": [
+    {
+      "id": "canal-west",
+      "bounds": { "x": 78, "y": 78, "width": 100, "height": 420 },
+      "roads": [{ "x": 90, "y": 90, "width": 76, "height": 396 }],
+      "navNodes": [
+        { "id": "west-north", "x": 128, "y": 128 },
+        { "id": "west-mid", "x": 128, "y": 288 },
+        { "id": "west-south", "x": 128, "y": 448 }
+      ],
+      "navLinks": [
+        ["west-north", "west-mid"],
+        ["west-mid", "west-south"]
+      ]
+    },
+    {
+      "id": "canal-east",
+      "bounds": { "x": 398, "y": 78, "width": 100, "height": 420 },
+      "roads": [{ "x": 410, "y": 90, "width": 76, "height": 396 }],
+      "navNodes": [
+        { "id": "east-north", "x": 448, "y": 128 },
+        { "id": "east-mid", "x": 448, "y": 288 },
+        { "id": "east-south", "x": 448, "y": 448 }
+      ],
+      "navLinks": [
+        ["east-north", "east-mid"],
+        ["east-mid", "east-south"]
+      ]
+    },
+    {
+      "id": "canal-north",
+      "bounds": { "x": 78, "y": 78, "width": 420, "height": 100 },
+      "roads": [{ "x": 90, "y": 90, "width": 396, "height": 76 }],
+      "navNodes": [
+        { "id": "north-garage", "x": 288, "y": 128 }
+      ],
+      "navLinks": [
+        ["north-garage", "west-north"],
+        ["north-garage", "east-north"]
+      ]
+    },
+    {
+      "id": "canal-south",
+      "bounds": { "x": 78, "y": 398, "width": 420, "height": 100 },
+      "roads": [{ "x": 90, "y": 410, "width": 396, "height": 76 }],
+      "navNodes": [
+        { "id": "south-junction", "x": 288, "y": 448 }
+      ],
+      "navLinks": [
+        ["south-junction", "west-south"],
+        ["south-junction", "east-south"]
+      ]
+    },
+    {
+      "id": "canal-entry",
+      "bounds": { "x": 238, "y": 436, "width": 100, "height": 248 },
+      "roads": [{ "x": 250, "y": 448, "width": 76, "height": 224 }],
+      "navNodes": [
+        { "id": "entry-south", "x": 288, "y": 640 }
+      ],
+      "navLinks": [
+        ["entry-south", "south-junction"]
+      ]
+    }
+  ]
+}

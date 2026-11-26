@@ -22,7 +22,12 @@ Route durable knowledge updates through [the shared Project Librarian](#shared-p
 
 - **Grand Theft Casual — Map Manager** (`01a21706-b147-73f0-81fe-0b249c2de343`, `gpt-6.2-sol`, High). Owns spatial layout, reusable mission areas, connectivity, mission boundaries, incremental extensions, and independent acceptance of map work.
 
+- **Game Engineering Manager** (`01a21714-bd64-73e3-833d-dc007254f7a3`, `gpt-6.2-sol`, High). Owns runtime, architecture, integration, and technical acceptance.
+- **Grand Theft Casual — Level Design Manager** (`01a21715-7b33-74d2-8fcb-3dca1f82c1d6`, `gpt-6.2-sol`, High). Owns concrete encounters, spawn, target and pickup placements, mission tuning, and independent acceptance of mission content.
+
 Story coordinates narrative constraints with Progression, which owns sequence planning. Map coordinates mission needs with Progression and visual direction with Art. The owner approves product decisions, and the PM coordinates and accepts cross-area work.
+
+For the Chapter 1 rebuild, Game Engineering dispatches the core runtime work, Map dispatches the shared world JSON, and Level Design dispatches the Chapter 1 mission JSON. Each manager routes their work through the assigned Sol implementer. Progression owns the sequence, Map owns geography, and Story writes narrative after gameplay rules are settled.
 
 ## Roles and decision authority
 

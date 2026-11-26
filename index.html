@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#101C3A">
+  <title>Getaway Totally Accidental</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./src/styles.css">
+  <script type="module" src="./src/app.mjs"></script>
+</head>
+<body>
+  <main id="shell">
+    <p id="notice" role="status" hidden></p>
+    <section id="loading" class="screen message-screen" aria-labelledby="load-title">
+      <h1 id="load-title">Loading Palmera Bay</h1>
+      <p id="load-detail"></p>
+      <a id="fixture-link" class="button secondary" href="?fixture=1" hidden>Open engineering fixture</a>
+    </section>
+    <section id="menu" class="screen" hidden>
+      <header class="menu-header">
+        <div>
+          <p class="brand" id="menu-context">Getaway Totally Accidental</p>
+          <h1 id="menu-title" tabindex="-1"></h1>
+          <p id="menu-completion" tabindex="-1" hidden>Chapter 1 complete. Replay any mission.</p>
+        </div>
+        <span class="balance" id="menu-bank" aria-label="Bank balance"></span>
+      </header>
+      <div class="route-scroll" id="route-scroll" tabindex="0" aria-label="Scrollable chapter map">
+        <div class="route-map" id="route-map">
+          <canvas class="map-path" id="map-path" aria-hidden="true"></canvas>
+          <ol id="mission-list" class="mission-list" aria-label="Chapter missions"></ol>
+        </div>
+      </div>
+      <div id="menu-detail" class="menu-detail" hidden></div>
+      <nav class="bottom-menu" aria-label="Main menu">
+        <button type="button" data-action="home">Story</button>
+        <button type="button" data-action="garage">Garage</button>
+        <button type="button" data-action="shop">Shop</button>
+        <button type="button" data-action="daily">Daily Missions</button>
+      </nav>
+    </section>
+    <section id="play" class="screen" aria-label="Driving" hidden>
+      <canvas id="stage" tabindex="0" aria-label="Overhead driving view" aria-describedby="drive-help"></canvas>
+      <header class="hud" id="driving-hud">
+        <div class="hud-objective">
+          <i id="hud-objective-icon" aria-hidden="true">▣</i>
+          <div><span>Objective</span><strong id="objective" role="status"></strong></div>
+        </div>
+        <button type="button" class="secondary pause-button" data-action="pause" aria-label="Pause">Ⅱ</button>
+        <div class="hud-damage">
+          <i aria-hidden="true">▰</i>
+          <div><span>Car damage</span><strong id="hud-damage"></strong></div>
+        </div>
+        <div class="hud-heat">
+          <i aria-hidden="true">✦</i>
+          <div><span>Heat</span><strong id="hud-heat"></strong></div>
+        </div>
+      </header>
+      <div class="play-footer" id="play-footer">
+        <p id="drive-help">Steer with ← / → or A / D. Brake with Space, ↓ or S. Esc pauses.</p>
+        <div class="controls" aria-label="Driving controls">
+          <button type="button" data-drive="left" aria-label="Steer left">← <span>Left</span></button>
+          <button type="button" data-drive="brake" aria-label="Brake">Brake</button>
+          <button type="button" data-drive="right" aria-label="Steer right"><span>Right</span> →</button>
+        </div>
+      </div>
+    </section>
+    <dialog id="postcard" aria-labelledby="card-title" aria-describedby="card-copy">
+      <div class="card-inner">
+        <p id="card-label" class="card-label"></p>
+        <h2 id="card-title" tabindex="-1"></h2>
+        <p id="card-copy"></p>
+        <p id="card-instruction" hidden></p>
+        <canvas id="teaching-inset" aria-hidden="true" hidden></canvas>
+        <div class="vehicle-field" id="vehicle-field" hidden>
+          <label for="vehicle-select">Vehicle</label>
+          <select id="vehicle-select"></select>
+          <strong id="vehicle-locked" hidden></strong>
+        </div>
+        <div class="card-actions" id="card-actions"></div>
+      </div>
+    </dialog>
+  </main>
+  <noscript>This game needs JavaScript.</noscript>
+</body>
+</html>

@@ -1,0 +1,324 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { loadContent } from '../src/content-loader.mjs';
+import { fixtureChapter, fixtureWorld } from '../src/fixture.mjs';
+import { createGame } from '../src/game-state.mjs';
+import { SAVE_KEY, newProgress, progressStore } from '../src/save.mjs';
+import { validateChapter, validateChapterOneProgression, validateWorld } from '../src/schema.mjs';
+import { NEUTRAL_INPUT, startDrive, stepDrive } from '../src/simulation.mjs';
+import { chooseVehicle, eligibleVehicles, STARTER_VEHICLE_ID, vehicles } from '../src/vehicles.mjs';
+import { makeMap, onRoad, roadLine } from '../src/world.mjs';
+
+const fixture = { chapter: fixtureChapter, world: fixtureWorld };
+const [first, second, third] = fixtureChapter.missions;
+const vehicle = vehicles[STARTER_VEHICLE_ID];
+const map = makeMap(fixtureWorld, first.mapPieceIds);
+const brake = { ...NEUTRAL_INPUT, brake: true };
+const left = { ...NEUTRAL_INPUT, left: true };
+
+function memoryStorage() {
+  const records = new Map();
+  return {
+    getItem: key => records.get(key) ?? null,
+    setItem: (key, value) => records.set(key, value),
+    records,
+  };
+}
+
+function makeGame(storage = memoryStorage(), content = fixture, settings = {}) {
+  const store = progressStore(content.chapter, {
+    getStorage: () => storage,
+    ...settings,
+  });
+  return createGame(content, store);
+}
+
+function driveUntilResult(game, input = NEUTRAL_INPUT) {
+  for (let i = 0; i < 900 && game.state.phase === 'driving'; i += 1) game.tick(input);
+}
+
+function startMission(game, id = first.id) {
+  assert.equal(game.dispatch('open', id), true);
+  assert.equal(game.state.phase, 'briefing');
+  assert.equal(game.dispatch('start'), true);
+}
+
+test('normal mode requires authored JSON and fixture mode is explicit', async () => {
+  const loaded = await loadContent({ fixture: true, fetcher: () => assert.fail('fixture requested authored files') });
+  assert.deepEqual(loaded.chapter, fixtureChapter);
+  assert.equal(loaded.fixture, true);
+  await assert.rejects(loadContent({ fetcher: () => new Response(null, { status: 404 }) }),
+    /src\/content\/world\.json.*404/);
+  await assert.rejects(loadContent({ fetcher: () => new Response('{ invalid') }),
+    /src\/content\/world\.json contains invalid JSON/);
+  await assert.rejects(loadContent({
+    fetcher: url => Response.json(url.pathname.endsWith('world.json') ? fixtureWorld : fixtureChapter),
+  }), /requires exactly 21 missions/);
+});
+
+test('schema validates IDs, selected road pieces, targets, payouts, and patrol spawn gaps', () => {
+  assert.equal(validateWorld(fixtureWorld), fixtureWorld);
+  assert.equal(validateChapter(fixtureChapter, fixtureWorld), fixtureChapter);
+  assert.throws(() => validateChapterOneProgression(fixtureChapter, fixtureWorld), /21 missions/);
+  const cases = [
+    [chapter => { chapter.missions[1].id = first.id; }, /duplicate ID/],
+    [chapter => { chapter.missions[0].mapPieceIds = ['missing']; }, /unknown piece/],
+    [chapter => { chapter.missions[0].defaultVehicleId = 'missing'; }, /unknown vehicle/],
+    [chapter => { chapter.missions[0].objective.destination.y = 210; }, /target center on drivable road/],
+    [chapter => { chapter.missions[0].bonus.payout = 0; }, /whole number of at least 1/],
+    [chapter => { chapter.missions[2].patrol.startGap = 300; }, /continuous drivable road behind/],
+    [chapter => { chapter.missions[0].bonus.spawn.x = -100; }, /spawn on drivable road/],
+  ];
+  for (const [change, error] of cases) {
+    const chapter = structuredClone(fixtureChapter);
+    change(chapter);
+    assert.throws(() => validateChapter(chapter, fixtureWorld), error);
+  }
+});
+
+test('road union admits cross-piece navigation links and obstacles subtract exact drivable area', () => {
+  const world = {
+    version: 1,
+    pieces: [
+      {
+        id: 'a', bounds: { x: -10, y: -10, width: 50, height: 40 },
+        roads: [{ x: 0, y: 0, width: 50, height: 20 }],
+        navNodes: [{ id: 'a-end', x: 15, y: 10 }],
+        navLinks: [['a-end', 'b-start']],
+      },
+      {
+        id: 'b', bounds: { x: 40, y: -10, width: 60, height: 40 },
+        roads: [{ x: 50, y: 0, width: 50, height: 20 }],
+        navNodes: [{ id: 'b-start', x: 80, y: 10 }],
+      },
+    ],
+  };
+  assert.equal(validateWorld(world), world);
+  let shared = makeMap(world, ['a', 'b']);
+  assert.equal(roadLine(shared, shared.nodes[0], shared.nodes[1]), true);
+  assert.deepEqual([...shared.neighbors.get('b-start')], ['a-end']);
+  world.pieces[1].obstacles = [{ x: 59.99, y: 8, width: .02, height: 4 }];
+  shared = makeMap(world, ['a', 'b']);
+  assert.equal(onRoad(shared, { x: 60, y: 10 }), false);
+  assert.equal(roadLine(shared, shared.nodes[0], shared.nodes[1]), false);
+  assert.throws(() => validateWorld(world), /leaves drivable road/);
+});
+
+test('a segment can only finish after the package, even when a marker is narrower than one step', () => {
+  const segment = structuredClone(first);
+  segment.objective = {
+    kind: 'pickup-delivery',
+    pickup: { x: 190.23, y: 82, radius: .03 },
+    destination: { x: 150, y: 82, radius: 5 },
+  };
+  const drive = startDrive(segment, map, vehicle);
+  while (drive.player.x < 170) stepDrive(drive);
+  assert.equal(drive.outcome, null);
+  assert.equal(drive.pickedUp, false);
+  while (drive.player.x < 210) stepDrive(drive);
+  assert.equal(drive.pickedUp, true);
+  assert.equal(drive.outcome, null);
+  const ordered = startDrive({
+    ...segment,
+    objective: { ...segment.objective, destination: { x: 210, y: 82, radius: 5 } },
+  }, map, vehicle);
+  for (let i = 0; i < 180 && !ordered.outcome; i += 1) stepDrive(ordered);
+  assert.equal(ordered.outcome?.kind, 'success');
+});
+
+test('steering, grip and braking affect motion, while one continuous wall contact costs one pip', () => {
+  const drive = startDrive(second, map, vehicle);
+  for (let i = 0; i < 32; i += 1) stepDrive(drive);
+  const speed = drive.player.speed;
+  for (let i = 0; i < 13; i += 1) stepDrive(drive, left);
+  assert.ok(drive.player.heading < 0);
+  assert.ok(drive.player.travelHeading > drive.player.heading);
+  assert.ok(drive.skidMarks.length > 0);
+  for (let i = 0; i < 18; i += 1) stepDrive(drive, brake);
+  assert.ok(drive.player.speed < speed);
+
+  const wallRun = startDrive({ ...first, spawn: { x: 700, y: 82, heading: 0 } }, map, vehicle);
+  for (let i = 0; i < 180; i += 1) stepDrive(wallRun);
+  assert.equal(wallRun.damage, vehicle.maxDamage - 1);
+  assert.equal(wallRun.outcome, null);
+  assert.ok(onRoad(map, wallRun.player));
+  const fragile = startDrive(wallRun.segment, map, vehicle, 1);
+  for (let i = 0; i < 180 && !fragile.outcome; i += 1) stepDrive(fragile);
+  assert.deepEqual(fragile.outcome, { kind: 'failure', reason: 'wrecked' });
+});
+
+test('patrol starts behind the car, follows drivable corners, and needs sustained proximity to capture', () => {
+  const drive = startDrive({
+    ...third, spawn: { x: 444, y: 310, heading: -Math.PI / 2 },
+    patrol: { ...third.patrol, startGap: 60 },
+  }, map, vehicle);
+  assert.ok(Math.abs(drive.patrol.x - 444) < .0001);
+  assert.equal(drive.patrol.y, 370);
+  drive.patrol.x = 180;
+  drive.patrol.y = 82;
+  assert.equal(roadLine(map, drive.patrol, drive.player), false);
+  let rounded = false;
+  for (let i = 0; i < 600 && !drive.outcome; i += 1) {
+    stepDrive(drive, brake);
+    assert.ok(onRoad(map, drive.patrol));
+    if (drive.patrol.y > 140) rounded = true;
+  }
+  assert.equal(rounded, true);
+  assert.deepEqual(drive.outcome, { kind: 'failure', reason: 'busted' });
+  assert.ok(drive.capture >= third.patrol.captureSeconds);
+});
+
+test('tier and category filter owned alternatives while a theft locks its authored car', () => {
+  const owned = [STARTER_VEHICLE_ID, 'street-coupe', 'city-hatchback'];
+  assert.deepEqual(eligibleVehicles(first, owned), [STARTER_VEHICLE_ID, 'street-coupe']);
+  assert.deepEqual(eligibleVehicles({ ...first, minTier: 2 }, owned), ['street-coupe']);
+  assert.equal(chooseVehicle({ ...first, defaultVehicleId: 'street-coupe' }, owned), 'street-coupe');
+  assert.equal(chooseVehicle({ ...first, allowVehicleSelection: false }, ['city-hatchback']), null);
+  assert.deepEqual(eligibleVehicles({ ...first, stolenVehicleId: 'city-hatchback' }, [STARTER_VEHICLE_ID]), ['city-hatchback']);
+});
+
+test('main clear and pending haul persist before banking, bank once after a reload, and replays pay', () => {
+  const storage = memoryStorage();
+  let game = makeGame(storage);
+  assert.equal(game.dispatch('open', second.id), false);
+  startMission(game);
+  driveUntilResult(game);
+  assert.equal(game.state.phase, 'success');
+  assert.deepEqual(game.state.progress.cleared, [first.id]);
+  assert.equal(game.state.progress.bank, 0);
+  assert.equal(game.state.progress.pending.haul, 100);
+  game = makeGame(storage);
+  assert.equal(game.state.phase, 'success');
+  assert.equal(game.state.run.haul, 100);
+  assert.equal(game.state.run.firstClear, true);
+  assert.equal(game.dispatch('bank'), true);
+  assert.equal(game.dispatch('bank'), false);
+  assert.equal(game.state.progress.bank, 100);
+  assert.equal(game.state.progress.pending, null);
+  game = makeGame(storage);
+  assert.equal(game.state.phase, 'home');
+  assert.equal(game.state.progress.bank, 100);
+  startMission(game);
+  driveUntilResult(game);
+  assert.equal(makeGame(storage).state.run.firstClear, false);
+  game.dispatch('bank');
+  assert.equal(makeGame(storage).state.progress.bank, 200);
+  assert.deepEqual(game.state.progress.cleared, [first.id]);
+  assert.equal(game.dispatch('open', second.id), true);
+});
+
+test('bonus briefing cancellation preserves the reward and bonus auto-banks once with carryover', () => {
+  const storage = memoryStorage();
+  const game = makeGame(storage);
+  startMission(game);
+  game.state.run.drive.damage = 2;
+  driveUntilResult(game);
+  const main = game.state.run;
+  assert.equal(game.dispatch('bonus'), true);
+  assert.equal(game.state.phase, 'bonus-briefing');
+  assert.equal(game.dispatch('cancel-bonus'), true);
+  assert.equal(game.state.phase, 'success');
+  assert.equal(game.state.run, main);
+  assert.equal(game.state.run.haul, first.payout);
+  assert.equal(game.state.run.damage, 2);
+  assert.equal(makeGame(storage).state.phase, 'success');
+  game.dispatch('bonus');
+  game.dispatch('start');
+  assert.equal(game.state.run.vehicleId, STARTER_VEHICLE_ID);
+  assert.equal(game.state.run.drive.damage, 2);
+  assert.equal(game.state.run.haul, 100);
+  assert.equal(makeGame(storage).state.phase, 'home');
+  driveUntilResult(game);
+  assert.equal(game.state.phase, 'home');
+  assert.equal(game.state.progress.bank, 175);
+  assert.equal(makeGame(storage).state.progress.bank, 175);
+  assert.equal(game.dispatch('bonus'), false);
+});
+
+test('failed bonus loses only its stake and replay starts the main with full condition', () => {
+  const content = structuredClone(fixture);
+  const mission = content.chapter.missions[0];
+  mission.bonus.spawn = { x: 700, y: 82, heading: 0 };
+  const storage = memoryStorage();
+  storage.setItem(SAVE_KEY, JSON.stringify({ ...newProgress(), bank: 50 }));
+  const game = makeGame(storage, content);
+  startMission(game);
+  game.state.run.drive.damage = 1;
+  driveUntilResult(game);
+  game.dispatch('bonus');
+  game.dispatch('start');
+  driveUntilResult(game);
+  assert.equal(game.state.phase, 'failure');
+  assert.deepEqual(game.state.failure, { reason: 'wrecked', lost: 100, bonus: true });
+  assert.equal(game.state.run.haul, 0);
+  assert.equal(makeGame(storage, content).state.progress.bank, 50);
+  assert.deepEqual(makeGame(storage, content).state.progress.cleared, [mission.id]);
+  assert.equal(game.dispatch('replay'), true);
+  assert.equal(game.state.phase, 'briefing');
+  assert.equal(game.dispatch('start'), true);
+  assert.equal(game.state.run.drive.damage, 4);
+  assert.equal(game.state.run.bonus, false);
+});
+
+test('pause leaves all simulation state frozen and resumes the same attempt', () => {
+  const game = makeGame();
+  startMission(game);
+  for (let i = 0; i < 30; i += 1) game.tick(NEUTRAL_INPUT);
+  assert.equal(game.dispatch('pause'), true);
+  const snapshot = structuredClone(game.state.run.drive);
+  for (let i = 0; i < 180; i += 1) assert.equal(game.tick(left), false);
+  assert.deepEqual(game.state.run.drive, snapshot);
+  assert.equal(game.dispatch('resume'), true);
+  game.tick(NEUTRAL_INPUT);
+  assert.ok(game.state.run.drive.player.x > snapshot.player.x);
+  assert.equal(game.state.run.drive.player.heading, snapshot.player.heading);
+});
+
+test('malformed progress and fixture saves leave legacy storage alone', () => {
+  const storage = memoryStorage();
+  const legacyKey = 'getaway-totally-accidental-prototype-v1';
+  storage.setItem(legacyKey, 'legacy data');
+  storage.setItem(SAVE_KEY, '{bad');
+  const notices = [];
+  const game = makeGame(storage, fixture, { onNotice: message => notices.push(message) });
+  assert.deepEqual(game.state.progress, newProgress());
+  assert.match(notices[0], /could not be read/);
+  assert.equal(storage.getItem(SAVE_KEY), '{bad');
+  const fixtureGame = makeGame(storage, fixture, { fixture: true });
+  startMission(fixtureGame);
+  driveUntilResult(fixtureGame);
+  fixtureGame.dispatch('bank');
+  assert.equal(storage.getItem(SAVE_KEY), '{bad');
+  assert.equal(storage.getItem(legacyKey), 'legacy data');
+  assert.equal(JSON.parse(storage.getItem(`${SAVE_KEY}-fixture`)).bank, 100);
+});
+
+test('storage write errors preserve one in-memory bank and allow a durable retry after reload', () => {
+  const storage = memoryStorage();
+  const notices = [];
+  const game = makeGame(storage, fixture, { onNotice: message => notices.push(message) });
+  startMission(game);
+  driveUntilResult(game);
+  const setItem = storage.setItem;
+  storage.setItem = () => { throw new Error('quota'); };
+  assert.equal(game.dispatch('bank'), true);
+  assert.equal(game.dispatch('bank'), false);
+  assert.equal(game.state.progress.bank, 100);
+  assert.match(notices.at(-1), /could not save progress/);
+  const reloaded = makeGame(storage);
+  assert.equal(reloaded.state.phase, 'success');
+  assert.equal(reloaded.state.progress.bank, 0);
+  storage.setItem = setItem;
+  reloaded.dispatch('bank');
+  assert.equal(makeGame(storage).state.progress.bank, 100);
+
+  const unavailable = makeGame(undefined, fixture, {
+    getStorage() { throw new Error('storage disabled'); },
+    onNotice: message => notices.push(message),
+  });
+  assert.match(notices.at(-1), /storage is unavailable/);
+  startMission(unavailable);
+  driveUntilResult(unavailable);
+  unavailable.dispatch('bank');
+  assert.equal(unavailable.state.progress.bank, 100);
+});
