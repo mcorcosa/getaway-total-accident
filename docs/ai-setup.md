@@ -2,6 +2,10 @@
 
 Use this guide to start a project with separate chats for ownership, management, implementation, and documentation. Give each chat a role, the project context it needs, and a clear reporting destination.
 
+## Moving or restoring the project
+
+On a new machine or checkout, read the [migration handoff](MIGRATION-HANDOFF.md) and verify the current workspace and exact **Grand Theft Casual** sidebar project. Use the [PM startup prompt](PROJECT-MANAGER-START-PROMPT.md) to restore a missing PM chat. The [team roster](team-roster.md) describes role startup and the registry for verified active routes. Its original-host IDs are provenance until the current checkout, project binding, and direct messaging are verified.
+
 ## Grand Theft Casual shared knowledge
 
 Before planning, dispatching, implementing, or reviewing project work, read the Pages MCP [start page](https://chatgpt.com/space/page_6b07df28ba988191b1bc6bf6d032120e), [Confirmed Decisions and Open Questions](https://chatgpt.com/space/page_d992c8842f1881918a640576e66e8c4b), and the relevant parts of [Game Design](https://chatgpt.com/space/page_0f74c2901b5081919928bcfcadc04eb2).
@@ -13,21 +17,21 @@ Before planning, dispatching, implementing, or reviewing project work, read the 
 
 Use the Pages connector's `read_page` with the exact `page_id`. To discover Pages by title or topic, use `find_pages` with the Space ID as `space_id` and the topic as `query`, then read the matched Page. If Pages is unavailable, use the local [working design](../HEATWAVE-GETAWAY-DESIGN.md) and report the missing access and any decision you could not verify to the PM.
 
-Route durable knowledge updates through [the shared Project Librarian](#shared-project-librarian), chat `01a21642-01a6-7532-a5cc-22340da08d8b`. Managers send the owner decision and its evidence, affected scope, and open questions. The Librarian handles one update at a time, validates changes, reconciles the working design and affected Pages for confirmed design decisions, checks both saved records, and dates the reconciliation. The latest verified owner decision takes precedence. Flag stale or inaccessible sources and record what was last verified. Reconciliation is manual.
+Route durable knowledge updates through [the shared Project Librarian](#shared-project-librarian). Use the active Librarian route verified through the [team roster](team-roster.md). Managers send the owner decision and its evidence, affected scope, and open questions. The Librarian handles one update at a time, validates changes, reconciles the working design and affected Pages for confirmed design decisions, checks both saved records, and dates the reconciliation. The latest verified owner decision takes precedence. Flag stale or inaccessible sources and record what was last verified. Reconciliation is manual.
 
 ### Project role routing
 
-- **Grand Theft Casual — Progression Manager** (`01a216fa-dabb-78d3-9e8c-c21319491631`, `gpt-6.2-sol`, High). Owns mission sequencing, the introduction of new objectives and mechanics, same-rule practice stretches, difficulty and complexity pacing, chapter count and order proposals, mastery and bonus pacing, and dependencies such as unlocks, vehicle eligibility, and economy.
-- **Grand Theft Casual — Story Manager** (`01a2168c-ad90-7302-aedb-cd4721ef17ab`). Owns narrative, characters, dialogue, and flavour after gameplay rules and sequencing are settled. Route former Story progression assignments to the Progression Manager.
+- **Grand Theft Casual — Progression Manager**. Owns mission sequencing, the introduction of new objectives and mechanics, same-rule practice stretches, difficulty and complexity pacing, chapter count and order proposals, mastery and bonus pacing, and dependencies such as unlocks, vehicle eligibility, and economy.
+- **Grand Theft Casual — Story Manager**. Owns narrative, characters, dialogue, and flavour after gameplay rules and sequencing are settled. Route former Story progression assignments to the Progression Manager.
 
-- **Grand Theft Casual — Map Manager** (`01a21706-b147-73f0-81fe-0b249c2de343`, `gpt-6.2-sol`, High). Owns spatial layout, reusable mission areas, connectivity, mission boundaries, incremental extensions, and independent acceptance of map work.
+- **Grand Theft Casual — Map Manager**. Owns spatial layout, reusable mission areas, connectivity, mission boundaries, incremental extensions, and independent acceptance of map work.
 
-- **Game Engineering Manager** (`01a21714-bd64-73e3-833d-dc007254f7a3`, `gpt-6.2-sol`, High). Owns runtime, architecture, integration, and technical acceptance.
-- **Grand Theft Casual — Level Design Manager** (`01a21715-7b33-74d2-8fcb-3dca1f82c1d6`, `gpt-6.2-sol`, High). Owns concrete encounters, spawn, target and pickup placements, mission tuning, and independent acceptance of mission content.
+- **Game Engineering Manager**. Owns runtime, architecture, integration, and technical acceptance.
+- **Grand Theft Casual — Level Design Manager**. Owns concrete encounters, spawn, target and pickup placements, mission tuning, and independent acceptance of mission content.
 
 Story coordinates narrative constraints with Progression, which owns sequence planning. Map coordinates mission needs with Progression and visual direction with Art. The owner approves product decisions, and the PM coordinates and accepts cross-area work.
 
-For the Chapter 1 rebuild, Game Engineering dispatches the core runtime work, Map dispatches the shared world JSON, and Level Design dispatches the Chapter 1 mission JSON. Each manager routes their work through the assigned Sol implementer. Progression owns the sequence, Map owns geography, and Story writes narrative after gameplay rules are settled.
+Game Engineering routes runtime and browser QA work, Map routes shared world data, and Level Design routes mission data. Each manager assigns work through the named Sol implementer required by the steps below. Progression owns the sequence, Map owns geography, and Story writes narrative after gameplay rules are settled.
 
 ## Roles and decision authority
 

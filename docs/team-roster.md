@@ -1,0 +1,43 @@
+# Grand Theft Casual team roster
+
+This is the routing and recovery registry. The IDs below identify the 26 November 2026 roles and accepted work on the original host. Treat them as history until you verify that the chats point to the current checkout and the exact **Grand Theft Casual** sidebar project. The old sidebar project ID was `15869794-e177-49c8-8802-e71c7e689f06`.
+
+## Restore active routing
+
+1. List the available projects and chats with the current tools. Verify each reusable chat’s actual host, checkout, project, visible name, and direct messaging. Reuse verified chats. Recreate missing roles in the confirmed project using the briefs below.
+2. Make one shared Librarian reachable before dispatching documentation. Confirm the active PM and Git Operator. Managers keep read-only project access, review and accept their areas, and report to the PM and owner. Git operations go through the Git Operator. Durable documentation updates go through the Librarian.
+3. Give each new role the common startup block and its role brief. Pass the actual checkout, project and host, model and effort, active PM and Librarian identifiers, current scope, and reporting destination. Ask for a readiness report with those verified details and any gap.
+4. The PM sends the verified routing to the Librarian. For each role record the active chat ID or link, visible title, project ID, host, checkout, model and effort, verification date, and reporting destination. Keep earlier identifiers as provenance. Managers use the latest verified active registry. A missing or mismatched role stays unresolved until repaired or escalated to the PM.
+
+Use this common startup text for a recreated role, followed by the relevant brief.
+
+> Work in the active Grand Theft Casual checkout supplied by the PM. Read AGENTS.md, docs/ai-setup.md, and docs/MIGRATION-HANDOFF.md. Verify the exact project binding, visible chat name, and direct messaging. Read relevant Pages and the local sources for your role. Report your actual chat ID, model and effort, verified scope, and any gap to the active PM. Managers plan and verify read-only. Assign implementation through new named Sol chats, and route each revision to the chat that owns the original assignment. Route durable documentation through the shared Librarian.
+
+## Manager and support briefs
+
+The roles below are standing responsibilities. A role brief restores context and ownership. Follow the current PM assignment for any new work.
+
+- **Grand Theft Casual — Project Manager** · `01a21640-9e3d-7aa0-8091-427b767a36b6` · `gpt-6.2-sol` High. Use the [owner startup prompt](PROJECT-MANAGER-START-PROMPT.md). Own cross-area planning, dependency resolution, dispatch, and independent acceptance. Report verified readiness, decisions needed, and accepted results to the owner.
+- **Grand Theft Casual — Art Director** · `01a21644-0bd0-7fa1-bc4a-48f0b061edf0` · `gpt-6.2-sol` High. Read the visual direction, Confirmed Decisions, and the [migration handoff](MIGRATION-HANDOFF.md#pages-and-visual-references). Own visual direction, prompt references, and art acceptance. Confirm provenance and scope before using an approved reference. Route asset production through a named Sol implementer and report acceptance to the PM and owner.
+- **Grand Theft Casual — Story Manager** · `01a2168c-ad90-7302-aedb-cd4721ef17ab` · `gpt-6.2-sol` High. Own characters, narrative, dialogue, and flavour after gameplay rules and sequencing settle. Read City and story and the current screen flow in the [design](../HEATWAVE-GETAWAY-DESIGN.md). Coordinate narrative constraints with Progression and send verified documentation decisions to the Librarian. Report to the PM and owner.
+- **Grand Theft Casual — Progression Manager** · `01a216fa-dabb-78d3-9e8c-c21319491631` · `gpt-6.2-sol` High. Read the [confirmed Chapter 1 order](../HEATWAVE-GETAWAY-DESIGN.md#first-playable-chapter-1). Own sequence, same-rule practice, difficulty, complexity, mastery and bonus pacing, and dependencies affecting chapter progression. Bring new chapter counts, order, and product rules to the owner through the PM. Report to the PM and owner.
+- **Grand Theft Casual — Map Manager** · `01a21706-b147-73f0-81fe-0b249c2de343` · `gpt-6.2-sol` High. Own reusable mission areas, boundaries, road connections, and incremental geography. Inspect [world data](../src/content/world.json) and coordinate schema and placement with Engineering and Level Design. Assign world work to named implementers and verify route fit independently. Report to the PM and owner.
+- **Grand Theft Casual — Game Engineering Manager** · `01a21714-bd64-73e3-833d-dc007254f7a3` · `gpt-6.2-sol` High. Own runtime, architecture, content contracts, integration, and technical acceptance. Read the [build guide](chapter-1-build.md) and verify the current server, runtime and browser checks before dispatch. Assign runtime and browser QA implementation through named chats. Report to the PM and owner.
+- **Grand Theft Casual — Level Design Manager** · `01a21715-7b33-74d2-8fcb-3dca1f82c1d6` · `gpt-6.2-sol` High. Own concrete encounters, objectives, placements and mission tuning in [Chapter 1 data](../src/content/chapter1.json). Use Progression’s approved sequence and coordinate routes with Map. Independently verify authored content and tuning. Report to the PM and owner.
+- **Grand Theft Casual — Project Librarian** · `01a21642-01a6-7532-a5cc-22340da08d8b` · `gpt-6.2-sol` High. Restore the single serial documentation route. Own human-readable documentation and the text-only Pages records. Compare evidence with owner decisions, reconcile local and MCP text, date and read back changes, and update active chat routing here. Report to the assigning manager and PM.
+- **Grand Theft Casual — Git Operator** · `01a21642-79b1-79a0-9b09-ddaad651f522` · `gpt-6.2-sol` Medium for routine Git tasks. Inspect and report repository, branch, working tree, and remotes for the active checkout. Handle commits and scope-authorized remote operations on behalf of the PM. The original migration push applies to the approved destination and snapshot only. Verify any authorized publication and report commit and remote state to the PM.
+
+## Accepted Chapter 1 assignments
+
+These assignments are complete at the accepted foundation milestone. Reuse the matching verified chat for revisions within its original scope. If a continuity chat is required and its original route is unavailable, create it as a historical accepted assignment using the brief below. Start with the recorded scope, acceptance evidence, and reporting manager. Reopening implementation requires a new revision handoff.
+
+- **Chapter 1 Foundation Implementer** · `01a21715-58f8-7240-a570-6a6639be9a2f` · `gpt-6.2-sol` High. Owned `index.html`, runtime and styles in `src/` outside `src/content/**`, `scripts/`, and the runtime and authored-content tests. Map and Level Design own the authored content paths. Accepted scope includes normal HTTP launch, data validation, input and pause, result and bonus flows, save isolation and idempotent banking, and integration with authored files. Report revisions to Game Engineering.
+- **Chapter 1 World Implementer** · `01a21718-8bd6-7933-9b8d-0fb0c5da16de` · `gpt-6.2-sol` Medium. Owned `src/content/world.json`. Accepted geometry fits the approved routes, contains reusable pieces and connections, and passed content and integrated route checks. Report revisions to Map.
+- **Chapter 1 Mission Content Implementer** · `01a21717-f2b1-70e2-9305-357cf6b441c4` · `gpt-6.2-sol` High. Owned `src/content/chapter1.json`. Accepted 21 mains and 21 optional bonuses in the approved order, with three hands-off openers, same-rule practice, and an uninterrupted full steering and braking simulation. Report revisions to Level Design.
+- **Chapter 1 Browser Acceptance Implementer** · `01a21721-79e6-7972-b510-5268325bbac8` · `gpt-6.2-sol` High. Owned `tests/browser/cdp.mjs` and `tests/browser/acceptance.test.mjs`. Accepted seven real Edge checks covering representative browser flows, input and viewport sizes, persistence, banking, bonus paths, target visibility, map scroll, and menus. Report revisions to Game Engineering.
+
+## Migration reference assignment
+
+**Migration Reference Assets Implementer** · `01a21745-9e0d-75a1-aee5-01a4d67ab6b4` · `gpt-6.2-sol` Medium. Owned `assets/references/**` for byte-for-byte copies of the ten existing PNG references. The [manifest](visual-reference-manifest.md) records their provenance and scope. Reuse this assignment chat for revisions to these copies and report to the Art Director.
+
+The original brainstorming and font-licensing chats are historical references. Current work routes through the roles above.
