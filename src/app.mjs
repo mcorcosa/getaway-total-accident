@@ -36,6 +36,7 @@ function start(app, gameUI, content, textures, attachObservation) {
   }
 
   function clearPointerInput() {
+    game.resetBrakeHold();
     ui.cancel();
     for (const id of captures) {
       if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
@@ -96,7 +97,7 @@ function start(app, gameUI, content, textures, attachObservation) {
     press(event.code, direction, event.repeat);
   });
   window.addEventListener('keyup', event => {
-    if (keys.delete(event.code)) ui.draw(input());
+    if (keys.delete(event.code)) drawAfterRelease();
   });
   canvas.addEventListener('blur', () => {
     clearInput();
@@ -105,7 +106,13 @@ function start(app, gameUI, content, textures, attachObservation) {
 
   function release(event) {
     captures.delete(event.pointerId);
-    if (ui.release(event.pointerId)) ui.draw(input());
+    if (ui.release(event.pointerId)) drawAfterRelease();
+  }
+
+  function drawAfterRelease() {
+    const held = input();
+    if (!held.brake) game.resetBrakeHold();
+    ui.draw(held);
   }
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) {
     window.addEventListener(type, release, true);

@@ -3,6 +3,8 @@ import { behind, distance, roadLine } from './world.mjs';
 export const STEP = 1 / 60;
 export const NEUTRAL_INPUT = Object.freeze({ left: false, right: false, brake: false });
 
+const reverseDwell = 1;
+const reverseSpeed = 36;
 const wrappedAngle = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
 
 function patrolWaypoint(map, patrol, player) {
@@ -54,6 +56,7 @@ export function startDrive(segment, map, vehicle, damage = vehicle.maxDamage) {
   return {
     segment, map, vehicle, damage,
     player: { x, y, heading, travelHeading: heading, speed: 0 },
+    brakeDwell: 0,
     patrol: segment.patrol ? { ...behind(segment.spawn, segment.patrol.startGap), heading } : null,
     patrolWaypoint: null,
     nextRoute: 0,
@@ -74,22 +77,34 @@ function setIncident(drive, message) {
   drive.incidentTime = 1.15;
 }
 
+function nextSpeed(drive, brake, forwardTarget, dt) {
+  const { player: { speed }, vehicle } = drive;
+  if (!brake) {
+    drive.brakeDwell = 0;
+    return approach(speed, speed < 0 ? 0 : forwardTarget, vehicle.acceleration * dt);
+  }
+  if (drive.brakeDwell >= reverseDwell) return approach(speed, -reverseSpeed, vehicle.acceleration * dt);
+  // The frame that finishes braking is still a moving frame. The dwell starts on the next one.
+  if (speed === 0) drive.brakeDwell = Math.min(reverseDwell, drive.brakeDwell + dt);
+  return approach(speed, 0, 220 * dt);
+}
+
 function driveCar(drive, input, dt) {
   const { player, vehicle, map } = drive;
   const steering = Number.isFinite(input.steering)
     ? Math.max(-1, Math.min(1, input.steering))
     : Number(Boolean(input.right)) - Number(Boolean(input.left));
-  const pace = player.speed / vehicle.speed;
+  const pace = Math.abs(player.speed) / vehicle.speed;
   const turn = vehicle.turn * (.35 + .65 * Math.min(1, pace * 2)) * (1 - .25 * pace);
-  player.heading = wrappedAngle(player.heading + steering * turn * dt);
   const steeringSpeed = 1 - (1 - .67) * Math.abs(steering);
-  const target = input.brake ? 0 : vehicle.speed * steeringSpeed;
-  const acceleration = (input.brake ? 330 : vehicle.acceleration) * dt;
-  player.speed = approach(player.speed, target, acceleration);
+  player.speed = nextSpeed(drive, input.brake, vehicle.speed * steeringSpeed, dt);
+  const direction = player.speed < 0 ? -1 : 1;
+  player.heading = wrappedAngle(player.heading + direction * steering * turn * dt);
   const slip = wrappedAngle(player.heading - player.travelHeading);
   player.travelHeading = wrappedAngle(player.travelHeading +
     slip * Math.min(1, dt * vehicle.grip * (1 - .45 * pace)));
-  drive.skidding = Math.abs(slip) > .26 && player.speed > vehicle.speed * .46;
+  const speed = Math.abs(player.speed);
+  drive.skidding = Math.abs(slip) > .26 && speed > vehicle.speed * .46;
   if (drive.skidding) {
     drive.skidMarks.push({ x: player.x, y: player.y, heading: player.travelHeading });
     if (drive.skidMarks.length > 90) drive.skidMarks.shift();
@@ -108,8 +123,8 @@ function driveCar(drive, input, dt) {
   const alongY = { x: player.x, y: next.y };
   const canMoveX = roadLine(map, player, alongX);
   const canMoveY = roadLine(map, player, alongY);
-  const impact = player.speed * Math.hypot(canMoveX ? 0 : ux, canMoveY ? 0 : uy);
-  if (!drive.contact && Math.max(impact, canMoveX && canMoveY ? player.speed : 0) >= 70) {
+  const impact = speed * Math.hypot(canMoveX ? 0 : ux, canMoveY ? 0 : uy);
+  if (!drive.contact && Math.max(impact, canMoveX && canMoveY ? speed : 0) >= 70) {
     drive.damage -= 1;
     drive.contact = true;
     setIncident(drive, 'Hard impact. Car condition dropped.');

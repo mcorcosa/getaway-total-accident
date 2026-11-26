@@ -59,7 +59,8 @@ function showSteeringWheel(base, center) {
   graphics(wheel).moveTo(-rim + 5, -7).lineTo(-13, -3).lineTo(0, 6).lineTo(13, -3).lineTo(rim - 5, -7)
     .moveTo(0, 6).lineTo(0, rim - 3)
     .stroke({ color: 0x637f8c, width: 5, cap: 'round', join: 'round' });
-  const index = graphics(wheel).roundRect(-2, -rim - 3, 4, 10, 2).fill(0xffffff);
+  const index = graphics(wheel, 'steer-index').roundRect(-2, -5, 4, 10, 2).fill(0xffffff);
+  index.y = 2 - rim;
 
   graphics(base).circle(center, center, 12).fill(0x142a35)
     .stroke({ color: 0x6d8d9b, width: 1 });
@@ -75,8 +76,8 @@ function showSteeringWheel(base, center) {
   for (const [x, y] of [[0, -4], [-4, 0], [4, 0], [0, 4]]) grip.circle(x, y, 1.3);
   grip.fill(0xb9d8d9);
 
-  const centered = { x: 0, y: 0, steering: 0 };
-  return ({ x, y, steering } = centered) => {
+  const centered = { x: 0, y: 0, steering: 0, rotation: 0 };
+  return ({ x, y, steering, rotation } = centered) => {
     const distance = Math.hypot(x, y);
     active.visible = steering !== 0;
     index.tint = active.visible ? colors.aqua : 0xc7d9dd;
@@ -84,7 +85,7 @@ function showSteeringWheel(base, center) {
     shaft.scale.x = distance;
     shaft.rotation = Math.atan2(y, x);
     shaft.tint = active.visible ? colors.aqua : 0x88a7b4;
-    wheel.rotation = steering * .65;
+    wheel.rotation = rotation;
     thumb.position.set(center + x, center + y);
   };
 }

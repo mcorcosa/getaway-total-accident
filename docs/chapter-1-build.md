@@ -31,7 +31,8 @@ node --test --test-reporter=spec tests/browser/pages-smoke.test.mjs
 
 - Acceleration is automatic. The first mission can clear with hands off the controls.
 - Steer with **Left / Right** or **A / D**. Brake with **Down**, **S**, or **Space**.
-- On touch, pull the **bottom-right steering wheel** sideways. A small pull turns gently. Pull farther to turn harder, then release to recenter. Hold the **left pedal** to brake. You can steer and brake together.
+- On touch, pull the **bottom-right wheel** sideways for proportional steering, or rotate around the rim in either direction. Steering keeps its direction past 180° and through a full turn. Turn back to ease off or release to recenter. Hold the **left pedal** to brake while steering.
+- To back up, hold the brake until the car stops, then keep holding for one second. Release during the wait to cancel. Release while backing up to return smoothly to automatic forward drive.
 - Pause with **Esc** or the on-screen **Pause** button.
 
 ## Run checks
