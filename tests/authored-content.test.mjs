@@ -4,8 +4,9 @@ import { readFile } from 'node:fs/promises';
 import { loadContent } from '../src/content-loader.mjs';
 import { createGame } from '../src/game-state.mjs';
 import { driveFrame } from '../src/renderer.mjs';
-import { progressStore } from '../src/save.mjs';
+import { newProgress, progressStore, SAVE_KEY } from '../src/save.mjs';
 import { NEUTRAL_INPUT, STEP } from '../src/simulation.mjs';
+import { STARTER_VEHICLE_ID, vehicles } from '../src/vehicles.mjs';
 import { distance, makeMap, roadLine } from '../src/world.mjs';
 
 const authoredContent = () => loadContent({
@@ -80,7 +81,7 @@ test('the authored chapter loads through the standard loader and all three openi
   const storage = { getItem: () => null, setItem: () => {} };
   const store = progressStore(content.chapter, { getStorage: () => storage });
   const game = createGame(content, store);
-  const durations = [];
+  const clearSteps = [];
   let bank = 0;
   for (const mission of content.chapter.missions.slice(0, 3)) {
     assert.equal(game.dispatch('open', mission.id), true);
@@ -106,13 +107,73 @@ test('the authored chapter loads through the standard loader and all three openi
     assert.equal(reachedWorldMarker.size, sizes.length, `${mission.id} shows the on-road target before completion`);
     assert.equal(game.state.phase, 'success', `${mission.id} did not finish with neutral input`);
     assert.equal(game.state.run.damage, game.state.run.drive.vehicle.maxDamage);
-    durations.push(steps * STEP);
+    clearSteps.push(steps);
     game.dispatch('bank');
     bank += mission.payout;
     assert.equal(game.state.progress.bank, bank);
   }
-  assert.ok(durations.every(seconds => seconds >= 2.5 && seconds <= 4), `Opening drive times ${durations.join(', ')}`);
-  assert.equal(durations[2], Math.max(...durations), 'C1-03 is the longest opening drive');
+  assert.deepEqual(clearSteps, [206, 268, 275], 'The opening drives retain their established fixed-step clear times');
+});
+
+test('vehicle pace comes from the catalog in both the authored chapter and the fixture', async () => {
+  const catalogPaces = [
+    [STARTER_VEHICLE_ID, 120, 204],
+    ['street-coupe', 136, 220],
+    ['city-hatchback', 116, 224],
+  ];
+  for (const [vehicleId, speed, acceleration] of catalogPaces) {
+    const vehicle = vehicles[vehicleId];
+    assert.deepEqual([vehicle.speed, vehicle.acceleration], [speed, acceleration], vehicleId);
+  }
+
+  const storage = { getItem: () => null, setItem: () => {} };
+  for (const content of [await authoredContent(), await loadContent({ fixture: true })]) {
+    const { chapter } = content;
+    const game = createGame(content, progressStore(chapter, { getStorage: () => storage }));
+    assert.equal(game.dispatch('open', chapter.missions[0].id), true);
+    assert.equal(game.dispatch('start'), true);
+    assert.equal(game.state.run.drive.vehicle, vehicles[STARTER_VEHICLE_ID]);
+  }
+});
+
+test('the authored patrol travels at its fixed speed, captures a stopped player and resets on replay', async () => {
+  const content = await authoredContent();
+  const { chapter } = content;
+  const mission = chapter.missions[13];
+  const starter = vehicles[STARTER_VEHICLE_ID];
+  const cleared = chapter.missions.slice(0, 13).map(({ id }) => id);
+  const storage = { getItem: () => JSON.stringify({ ...newProgress(), cleared }), setItem: () => {} };
+  const game = createGame(content, progressStore(chapter, { getStorage: () => storage }));
+  assert.equal(game.dispatch('open', mission.id), true);
+  assert.equal(game.dispatch('start'), true);
+  const { drive } = game.state.run;
+  const patrol = { ...drive.patrol };
+  const originalRule = { startGap: 84, speed: 54.4, captureRadius: 29, captureSeconds: 1.4 };
+  assert.deepEqual(mission.patrol, originalRule);
+  assert.equal(drive.segment, mission);
+  assert.equal(distance(drive.player, patrol), mission.patrol.startGap);
+
+  game.tick(NEUTRAL_INPUT);
+  assert.equal(drive.player.speed, starter.acceleration * STEP);
+  assert.ok(Math.abs(distance(patrol, drive.patrol) / STEP - originalRule.speed) < 1e-9);
+  for (let step = 0; step < 40; step += 1) game.tick(NEUTRAL_INPUT);
+  assert.equal(drive.player.speed, starter.speed);
+
+  const brake = { ...NEUTRAL_INPUT, brake: true };
+  game.tick(brake);
+  assert.ok(drive.player.speed < starter.speed);
+  for (let step = 0; step < 600 && game.state.phase === 'driving'; step += 1) game.tick(brake);
+  assert.equal(game.state.phase, 'failure');
+  assert.equal(drive.player.speed, 0);
+  assert.deepEqual(drive.outcome, { kind: 'failure', reason: 'busted' });
+  assert.ok(drive.capture >= originalRule.captureSeconds);
+  assert.deepEqual(mission.patrol, originalRule);
+
+  assert.equal(game.dispatch('replay'), true);
+  assert.equal(game.dispatch('start'), true);
+  assert.equal(game.state.run.drive.vehicle, starter);
+  assert.equal(game.state.run.drive.segment, mission);
+  assert.deepEqual(game.state.run.drive.patrol, patrol);
 });
 
 test('the authored Canal Ward shows closed cross streets without covering active pavement', async () => {
@@ -129,36 +190,46 @@ test('the authored Canal Ward shows closed cross streets without covering active
   }
 });
 
-test('all 21 authored mains and bonuses clear with steering and braking through an uninterrupted campaign', async () => {
-  const content = await authoredContent();
-  const records = new Map();
-  const storage = { getItem: key => records.get(key) ?? null, setItem: (key, value) => records.set(key, value) };
-  const getStorage = () => storage;
-  const store = progressStore(content.chapter, { getStorage });
-  const game = createGame(content, store);
-  let bank = 0;
+for (const vehicleId of [STARTER_VEHICLE_ID, 'street-coupe']) {
+  test(`all 21 authored mains and bonuses clear in the ${vehicles[vehicleId].name}`, async () => {
+    const content = await authoredContent();
+    const records = new Map();
+    const storage = { getItem: key => records.get(key) ?? null, setItem: (key, value) => records.set(key, value) };
+    const getStorage = () => storage;
+    if (vehicleId !== STARTER_VEHICLE_ID) {
+      storage.setItem(SAVE_KEY, JSON.stringify({ ...newProgress(), ownedVehicleIds: [STARTER_VEHICLE_ID, vehicleId] }));
+    }
+    const store = progressStore(content.chapter, { getStorage });
+    const game = createGame(content, store);
+    let bank = 0;
 
-  for (const [index, mission] of content.chapter.missions.entries()) {
-    const order = index + 1;
-    assert.equal(game.dispatch('open', mission.id), true, mission.id);
-    assert.equal(game.dispatch('start'), true, mission.id);
-    followRoute(game, mainTurns.get(order) ?? [], order <= 3, `${mission.id} main`);
-    assert.equal(game.state.phase, 'success');
-    assert.equal(game.state.progress.cleared.at(-1), mission.id);
-    assert.equal(game.state.progress.bank, bank);
-    assert.equal(game.state.run.haul, mission.payout);
+    for (const [index, mission] of content.chapter.missions.entries()) {
+      const order = index + 1;
+      assert.equal(game.dispatch('open', mission.id), true, mission.id);
+      if (vehicleId !== STARTER_VEHICLE_ID) assert.equal(game.dispatch('vehicle', vehicleId), true, mission.id);
+      assert.equal(game.dispatch('start'), true, mission.id);
+      assert.equal(game.state.run.drive.vehicle, vehicles[vehicleId]);
+      assert.equal(game.state.run.drive.segment, mission);
+      followRoute(game, mainTurns.get(order) ?? [], order <= 3, `${mission.id} main`);
+      assert.equal(game.state.phase, 'success');
+      assert.equal(game.state.progress.cleared.at(-1), mission.id);
+      assert.equal(game.state.progress.bank, bank);
+      assert.equal(game.state.run.haul, mission.payout);
 
-    assert.equal(game.dispatch('bonus'), true);
-    assert.equal(game.dispatch('start'), true);
-    followRoute(game, bonusTurns.get(order) ?? [], order <= 8, `${mission.id} bonus`);
-    bank += mission.payout + mission.bonus.payout;
-    assert.equal(game.state.phase, 'home');
-    assert.equal(game.state.progress.bank, bank);
-  }
+      assert.equal(game.dispatch('bonus'), true);
+      assert.equal(game.dispatch('start'), true);
+      assert.equal(game.state.run.drive.vehicle, vehicles[vehicleId]);
+      assert.equal(game.state.run.drive.segment, mission.bonus);
+      followRoute(game, bonusTurns.get(order) ?? [], order <= 8, `${mission.id} bonus`);
+      bank += mission.payout + mission.bonus.payout;
+      assert.equal(game.state.phase, 'home');
+      assert.equal(game.state.progress.bank, bank);
+    }
 
-  const reloaded = createGame(content, progressStore(content.chapter, { getStorage }));
-  assert.equal(reloaded.state.phase, 'home');
-  assert.equal(reloaded.state.progress.pending, null);
-  assert.equal(reloaded.state.progress.bank, bank);
-  assert.deepEqual(reloaded.state.progress.cleared, content.chapter.missions.map(mission => mission.id));
-});
+    const reloaded = createGame(content, progressStore(content.chapter, { getStorage }));
+    assert.equal(reloaded.state.phase, 'home');
+    assert.equal(reloaded.state.progress.pending, null);
+    assert.equal(reloaded.state.progress.bank, bank);
+    assert.deepEqual(reloaded.state.progress.cleared, content.chapter.missions.map(mission => mission.id));
+  });
+}

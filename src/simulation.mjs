@@ -76,12 +76,15 @@ function setIncident(drive, message) {
 
 function driveCar(drive, input, dt) {
   const { player, vehicle, map } = drive;
-  const steering = Number(input.right) - Number(input.left);
+  const steering = Number.isFinite(input.steering)
+    ? Math.max(-1, Math.min(1, input.steering))
+    : Number(Boolean(input.right)) - Number(Boolean(input.left));
   const pace = player.speed / vehicle.speed;
   const turn = vehicle.turn * (.35 + .65 * Math.min(1, pace * 2)) * (1 - .25 * pace);
   player.heading = wrappedAngle(player.heading + steering * turn * dt);
-  const target = input.brake ? 0 : vehicle.speed * (steering ? .67 : 1);
-  const acceleration = (input.brake ? 540 : vehicle.acceleration) * dt;
+  const steeringSpeed = 1 - (1 - .67) * Math.abs(steering);
+  const target = input.brake ? 0 : vehicle.speed * steeringSpeed;
+  const acceleration = (input.brake ? 330 : vehicle.acceleration) * dt;
   player.speed = approach(player.speed, target, acceleration);
   const slip = wrappedAngle(player.heading - player.travelHeading);
   player.travelHeading = wrappedAngle(player.travelHeading +

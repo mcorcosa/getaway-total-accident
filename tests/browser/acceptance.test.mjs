@@ -12,7 +12,7 @@ import { launchBrowser, openPage, poll } from './cdp.mjs';
 const mainPayout = 100;
 const bonusPayout = 50;
 const pendingMain = { missionId: 'C1-01', vehicleId: 'starter-coupe', haul: mainPayout, damage: 4 };
-const neutral = { left: false, right: false, brake: false };
+const neutral = { left: false, right: false, brake: false, steering: 0 };
 const chapterUrl = new URL('../../src/content/chapter1.json', import.meta.url);
 const mission = id => `mission:${id}`;
 const action = id => `card:${id}`;
@@ -283,7 +283,7 @@ async function pixelSamples(page, image, request) {
       const vergeX = Math.max(0, centerX - (upright ? 32 : 12));
       const vergeY = Math.max(y, centerY - (upright ? 12 : 32));
       const pavement = samples.getImageData(vergeX, vergeY, Math.min(upright ? 64 : 24, width - vergeX),
-        Math.min(upright ? 24 : 64, y + height - vergeY)).data;
+        Math.min(upright ? 24 : 64, samples.canvas.height - vergeY)).data;
       let streets = 0;
       for (let i = 0; i < pavement.length; i += 4) {
         const red = pavement[i];
@@ -334,14 +334,21 @@ function verifyTouchControls(view) {
   for (const { bounds } of [brake, stick]) {
     assert.ok(bounds.height >= 44 && bounds.y > hudBottom && bounds.y + bounds.height < view.height);
   }
-  assert.equal(brake.bounds.y, stick.bounds.y);
+  assert.ok(stick.bounds.width >= 90 && Math.abs(stick.bounds.width - stick.bounds.height) < .01);
+  assert.ok(Math.abs(brake.bounds.y + brake.bounds.height - stick.bounds.y - stick.bounds.height) < .01);
   assert.equal(control(view, 'drive:left'), undefined);
   assert.equal(control(view, 'drive:right'), undefined);
 }
 
 function steeringOffset(view) {
-  const { x, width } = control(view, 'drive:steer').bounds;
-  return object(view, 'steer-thumb').position.x - (x + width / 2);
+  const { x, y, width, height } = control(view, 'drive:steer').bounds;
+  const thumb = object(view, 'steer-thumb').position;
+  return { x: thumb.x - (x + width / 2), y: thumb.y - (y + height / 2) };
+}
+
+function verifyCenteredStick(view) {
+  const { x, y } = steeringOffset(view);
+  assert.ok(Math.hypot(x, y) < 1, `The thumb is centered, offset was ${x}, ${y}`);
 }
 
 async function holdBrake(page, mobile) {
@@ -371,12 +378,15 @@ function visibleObjective(view) {
 
 async function verifyNeighborhood(page, view) {
   const { hudBottom, footerTop } = playfield(view);
+  const overlays = view.scene.filter(node => node.visible && node.ancestor === 'driving-controls').map(node => node.bounds);
   assert.equal(object(view, 'context-streets').ancestor, 'world-geometry');
   assert.equal(object(view, 'canal-buildings').ancestor, 'world-geometry');
   const closure = view.scene.find(node => {
     if (node.ancestor !== 'road-closures' || !node.visible) return false;
     const { x, y, width, height } = node.bounds;
-    return x > 1 && x + width < view.width - 1 && y > hudBottom + 1 && y + height < footerTop - 1;
+    if (x <= 1 || x + width >= view.width - 1 || y <= hudBottom + 1 || y + height >= view.height - 1) return false;
+    return overlays.every(box => x + width < box.x - 1 || x > box.x + box.width + 1 ||
+      y + height < box.y - 1 || y > box.y + box.height + 1);
   });
   assert.ok(closure, 'The playable view contains an unobstructed barricade on a nearby closed street');
   const integerBounds = Object.fromEntries(Object.entries(closure.bounds).map(([key, value]) => [key, Math.round(value)]));
@@ -393,6 +403,8 @@ async function captureFirstBend(page, name, mobile) {
   assert.ok(object(briefing, 'context-streets').visible);
   await start(page);
   let releaseBrake = await holdBrake(page, mobile);
+  await poll(async () => (await snapshot(page)).drive.player.speed === 0, 'brake to stop before sampling the closed junction');
+  await settle(page);
   await verifyNeighborhood(page, await snapshot(page));
   await shot(page, `${name}-c1-04-closed-junction`);
   await releaseBrake();
@@ -559,6 +571,77 @@ test('Authored M1 bonus success carries condition and automatically banks both p
   });
 });
 
+test('390×600 wheel turns progressively through light, middle and edge pulls', { timeout: 24000 }, async t => {
+  await inBrowser('mobile-proportional-steering', { width: 390, height: 600, mobile: true }, async page => {
+    await openMission(page, 'C1-01');
+    await start(page);
+    const brake = await holdPoint(page, 'brake', 1);
+    const stick = await holdPoint(page, 'steer', 2);
+    await contact(page, 'touchStart', [brake]);
+    await poll(async () => {
+      const view = await snapshot(page);
+      return view.input.brake && view.drive.player.speed === 0;
+    }, 'brake to stop the car so that all steering samples start at the same pace');
+    await contact(page, 'touchStart', [stick]);
+
+    async function measureTurn(dx, dy = 0) {
+      await moveContacts(page, { ...stick, x: stick.x + dx, y: stick.y + dy });
+      const sample = await page.read(async () => {
+        const first = window.__getawayScene();
+        const start = performance.now();
+        const end = await new Promise(resolve => {
+          function frame(time) {
+            if (time - start >= 240) resolve(time);
+            else requestAnimationFrame(frame);
+          }
+          requestAnimationFrame(frame);
+        });
+        const last = window.__getawayScene();
+        return { startHeading: first.drive.player.heading, endHeading: last.drive.player.heading,
+          seconds: (end - start) / 1000, view: last };
+      });
+      assert.equal(sample.view.drive.player.speed, 0);
+      assert.equal(sample.view.input.brake, true);
+      return { rate: headingDelta(sample.endHeading, sample.startHeading) / sample.seconds, view: sample.view };
+    }
+
+    const light = await measureTurn(10);
+    await shot(page, 'mobile-390-controls-slight');
+    const middle = await measureTurn(22);
+    const edge = await measureTurn(47);
+    const lightRatio = light.rate / edge.rate;
+    const middleRatio = middle.rate / edge.rate;
+    t.diagnostic(`Measured light / middle / edge yaw rates: ${[light.rate, middle.rate, edge.rate].map(value => value.toFixed(3)).join(' / ')} rad/s`);
+    assert.ok(edge.rate > .35 && lightRatio > .035 && lightRatio < .25,
+      `Light steering should turn at a small fraction of full rate, observed ${lightRatio}`);
+    assert.ok(middleRatio > .30 && middleRatio < .75, `Middle steering rate ratio was ${middleRatio}`);
+    assert.ok(light.view.input.steering > 0 && light.view.input.steering < .25);
+    assert.ok(middle.view.input.steering > .3 && middle.view.input.steering < .75);
+    assert.equal(edge.view.input.steering, 1);
+
+    const vertical = await measureTurn(0, -67);
+    assert.ok(Math.abs(vertical.rate) < .001);
+    assert.equal(vertical.view.input.steering, 0);
+    const wheel = control(vertical.view, 'drive:steer').bounds;
+    const thumb = object(vertical.view, 'steer-thumb').position;
+    assert.ok(Math.abs(thumb.x - stick.x) < 1 && thumb.y < stick.y - 25);
+    const diagonal = await measureTurn(42, -42);
+    assert.ok(diagonal.view.input.steering > .4 && diagonal.view.input.steering < .8);
+    const diagonalThumb = object(diagonal.view, 'steer-thumb').position;
+    assert.ok(Math.abs(Math.hypot(diagonalThumb.x - stick.x, diagonalThumb.y - stick.y) - (stick.y - thumb.y)) < 1);
+    const inside = await measureTurn(4);
+    assert.ok(Math.abs(inside.rate) < .001);
+    assert.equal(inside.view.input.steering, 0);
+
+    await contact(page, 'touchEnd', [stick]);
+    const outside = { id: stick.id, x: wheel.x + 3, y: wheel.y + 3 };
+    await contact(page, 'touchStart', [outside]);
+    await moveContacts(page, { ...stick, x: stick.x + 30 });
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true });
+    await contact(page, 'touchEnd');
+  });
+});
+
 test('390×600 touch steering crosses neutral and releases independently of the brake', { timeout: 26000 }, async () => {
   await inBrowser('mobile-controls', { width: 390, height: 600, mobile: true }, async page => {
     assert.equal(await page.read(() => navigator.maxTouchPoints), 2);
@@ -566,12 +649,12 @@ test('390×600 touch steering crosses neutral and releases independently of the 
     await shot(page, 'mobile-390-briefing');
     const idle = await start(page);
     verifyTouchControls(idle);
-    assert.ok(Math.abs(steeringOffset(idle)) < 1);
+    verifyCenteredStick(idle);
     assert.equal(object(idle, 'held:brake').visible, false);
     await shot(page, 'mobile-390-controls-neutral');
     const brake = await holdPoint(page, 'brake', 1);
     const stick = await holdPoint(page, 'steer', 2);
-    const right = { ...stick, x: stick.x + 64, y: stick.y - 100 };
+    const right = { ...stick, x: stick.x + 48 };
     const left = { ...stick, x: stick.x - 47 };
     await contact(page, 'touchStart', [brake]);
     await poll(async () => (await snapshot(page)).input.brake, 'touch brake');
@@ -584,25 +667,25 @@ test('390×600 touch steering crosses neutral and releases independently of the 
     await moveContacts(page, { ...stick, x: stick.x + 4 });
     let view = await snapshot(page);
     assert.deepEqual(view.input, { ...neutral, brake: true });
-    assert.ok(steeringOffset(view) > 2 && steeringOffset(view) < 6, 'The thumb moves inside the dead zone');
+    assert.ok(steeringOffset(view).x > 2 && steeringOffset(view).x < 6, 'The thumb moves inside the dead zone');
     await contact(page, 'touchMove', [right]);
     await poll(async () => {
       const view = await snapshot(page);
       return view.input.brake && view.input.right && headingDelta(view.drive.player.heading, stopped.heading) > .25;
-    }, 'the braked car to turn right with the steering finger above the control');
+    }, 'the braked car to turn right with the steering finger near the right rim');
     view = await snapshot(page);
-    assert.ok(steeringOffset(view) > 30 && steeringOffset(view) < right.x - stick.x);
+    assert.ok(steeringOffset(view).x > 30 && steeringOffset(view).x < right.x - stick.x);
     await shot(page, 'mobile-390-controls-steering-and-brake');
 
     await moveContacts(page, stick);
     view = await snapshot(page);
     assert.deepEqual(view.input, { ...neutral, brake: true });
-    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    verifyCenteredStick(view);
     const centeredHeading = view.drive.player.heading;
     await contact(page, 'touchMove', [left]);
     await poll(async () => {
       const view = await snapshot(page);
-      return view.input.brake && view.input.left && !view.input.right && steeringOffset(view) < -25 &&
+      return view.input.brake && view.input.left && !view.input.right && steeringOffset(view).x < -25 &&
         headingDelta(view.drive.player.heading, centeredHeading) < -.20;
     }, 'the same finger to reverse steering through the center');
 
@@ -610,24 +693,24 @@ test('390×600 touch steering crosses neutral and releases independently of the 
     view = await snapshot(page);
     assert.deepEqual(view.input, { ...neutral, brake: true });
     assert.equal(object(view, 'held:brake').visible, true);
-    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    verifyCenteredStick(view);
     await contact(page, 'touchStart', [stick]);
     await moveContacts(page, right);
     await contact(page, 'touchEnd', [brake]);
     view = await snapshot(page);
-    assert.deepEqual(view.input, { ...neutral, right: true });
+    assert.deepEqual(view.input, { ...neutral, right: true, steering: 1 });
     assert.equal(object(view, 'held:brake').visible, false);
-    assert.ok(steeringOffset(view) > 30);
+    assert.ok(steeringOffset(view).x > 30);
 
     const otherStick = { ...left, id: 1 };
     await contact(page, 'touchStart', [otherStick]);
     await moveContacts(page, { ...otherStick, x: otherStick.x - 8 });
-    assert.deepEqual((await snapshot(page)).input, { ...neutral, right: true });
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, right: true, steering: 1 });
     await contact(page, 'touchEnd', [right]);
     await moveContacts(page, { ...otherStick, x: otherStick.x + 70 });
     view = await snapshot(page);
     assert.deepEqual(view.input, neutral, 'A second touch must not take over the stick after its owner lifts');
-    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    verifyCenteredStick(view);
     await contact(page, 'touchEnd');
 
     const otherBrake = { ...brake, id: 2, x: brake.x + 9 };
@@ -639,12 +722,12 @@ test('390×600 touch steering crosses neutral and releases independently of the 
 
     await contact(page, 'touchStart', [brake, stick]);
     await moveContacts(page, right);
-    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true });
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true, steering: 1 });
     await contact(page, 'touchCancel');
     view = await snapshot(page);
     assert.deepEqual(view.input, neutral);
     assert.equal(object(view, 'held:brake').visible, false);
-    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    verifyCenteredStick(view);
     const released = view.drive.player;
     await poll(async () => {
       const player = (await snapshot(page)).drive?.player;
@@ -673,13 +756,13 @@ test('Mobile driving releases captured controls on lost capture, pause, resize, 
       });
       await contact(page, 'touchStart', [stick]);
       await moveContacts(page, right);
-      assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true });
+      assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true, steering: 1 });
       return { brake, stick, right };
     }
 
     function verifyReset(view) {
       assert.deepEqual(view.input, neutral);
-      assert.ok(Math.abs(steeringOffset(view)) < 1);
+      verifyCenteredStick(view);
       assert.equal(object(view, 'held:brake').visible, false);
     }
 
@@ -702,7 +785,7 @@ test('Mobile driving releases captured controls on lost capture, pause, resize, 
     assert.equal(await page.read(() => window.steerCapture.lost), true);
     let view = await snapshot(page);
     assert.deepEqual(view.input, { ...neutral, brake: true });
-    assert.ok(Math.abs(steeringOffset(view)) < 1);
+    verifyCenteredStick(view);
     await contact(page, 'touchEnd');
     verifyReset(await snapshot(page));
 
@@ -765,8 +848,17 @@ test('Wider touch-capable driving offers the stick and brake and keeps keyboard 
     const stick = await holdPoint(page, 'steer', 1);
     await page.key('ArrowDown', 'rawKeyDown');
     await contact(page, 'touchStart', [stick]);
-    await moveContacts(page, { ...stick, x: stick.x - 38 });
-    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, left: true });
+    await moveContacts(page, { ...stick, x: stick.x - 23 });
+    const touch = (await snapshot(page)).input;
+    assert.ok(touch.left && touch.brake && touch.steering > -.6 && touch.steering < -.4);
+    await page.key('ArrowRight', 'rawKeyDown');
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, right: true, steering: 1 });
+    await page.key('ArrowLeft', 'rawKeyDown');
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, left: true, right: true });
+    await page.key('ArrowRight', 'keyUp');
+    assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true, left: true, steering: -1 });
+    await page.key('ArrowLeft', 'keyUp');
+    assert.deepEqual((await snapshot(page)).input, touch);
     await contact(page, 'touchEnd');
     assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true });
     await page.key('ArrowDown', 'keyUp');

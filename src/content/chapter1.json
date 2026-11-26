@@ -361,7 +361,7 @@
         "destination": { "x": 288, "y": 128, "radius": 24 }
       },
       "payout": 175,
-      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "patrol": { "startGap": 84, "speed": 54.4, "captureRadius": 29, "captureSeconds": 1.4 },
       "bonus": {
         "flavour": "There’s another package on the north street.",
         "instructions": "Collect the package, then turn right and deliver it to the east garage.",
@@ -389,7 +389,7 @@
         "destination": { "x": 448, "y": 290, "radius": 24 }
       },
       "payout": 175,
-      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "patrol": { "startGap": 84, "speed": 54.4, "captureRadius": 29, "captureSeconds": 1.4 },
       "bonus": {
         "flavour": "There’s a package on your way to the next garage.",
         "instructions": "Collect the package on the east street, then turn left and reach the north garage.",
@@ -417,7 +417,7 @@
         "destination": { "x": 288, "y": 128, "radius": 24 }
       },
       "payout": 175,
-      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "patrol": { "startGap": 84, "speed": 54.4, "captureRadius": 29, "captureSeconds": 1.4 },
       "bonus": {
         "flavour": "There’s one more package on this block.",
         "instructions": "Pick up the package on the north street, then turn left toward the west safehouse.",
@@ -445,7 +445,7 @@
         "destination": { "x": 288, "y": 128, "radius": 24 }
       },
       "payout": 175,
-      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "patrol": { "startGap": 84, "speed": 54.4, "captureRadius": 29, "captureSeconds": 1.4 },
       "bonus": {
         "flavour": "There’s one more package on this block.",
         "instructions": "Pick up the package on the north street, then turn left toward the west safehouse.",
@@ -473,7 +473,7 @@
         "destination": { "x": 288, "y": 128, "radius": 24 }
       },
       "payout": 175,
-      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "patrol": { "startGap": 84, "speed": 54.4, "captureRadius": 29, "captureSeconds": 1.4 },
       "bonus": {
         "flavour": "There’s one more package on this block.",
         "instructions": "Pick up the package on the north street, then turn left toward the west safehouse.",
@@ -557,7 +557,7 @@
         "destination": { "x": 128, "y": 326, "radius": 24 }
       },
       "payout": 200,
-      "patrol": { "startGap": 84, "speed": 68, "captureRadius": 29, "captureSeconds": 1.4 },
+      "patrol": { "startGap": 84, "speed": 54.4, "captureRadius": 29, "captureSeconds": 1.4 },
       "bonus": {
         "flavour": "There’s another package just up the street.",
         "instructions": "Collect the package, then keep straight to the marker.",

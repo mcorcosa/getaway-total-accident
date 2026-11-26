@@ -158,7 +158,7 @@ Replays pay the normal base amount and can award the same additional cash as a f
 2. **Gameplay.** Driving fills the viewport. Overlay exactly three icon-led indicators for the objective, car damage, and heat. Heat uses five fillable stars. Keep gameplay buttons above the driving view. Pause overlays gameplay.
 3. **Result and bonus postcards.** Success, failure, and the bonus briefing reuse the pre-job postcard layout, with actions appropriate to each result. Failure uses reusable postcards selected by loss cause and offers **Replay** or **Back to menu**.
 
-**Mobile driving controls.** Use a horizontal steering stick at the bottom right and a hold-to-brake pedal on the left. Players can steer and brake at the same time. Acceleration stays automatic and the desktop keyboard bindings carry forward. The PM verified the implementation locally in Edge on 26 November 2026.
+**Mobile driving controls.** Use a wheel-like radial steering stick at the bottom right. A small pull to either side gives gentle steering, with steering strength increasing in proportion to the pull up to full steering. Hold the left pedal to brake while steering. Acceleration stays automatic and the desktop keyboard bindings carry forward. The PM verified proportional steering, independent steering and brake input, and input resets locally in Edge on 26 November 2026.
 
 **District unlocks.** Show them on Home's Story map.
 
@@ -184,6 +184,8 @@ Every vehicle has a **category** and a **tier**. The category tells you what the
 - **Van.** Wide turns, lower top speed, **6 damage pips**, **4 crates**. Breaks through foam construction barriers without damage.
 
 Driving stays automatic. Steering turns the body first, and the tires pull the car's momentum around over the next few frames. The hatchback grips sooner than the coupes. Fast turns leave short skid marks. On desktop, steer with **Left / Right** or **A / D** and brake with **Down**, **S**, or **Space**.
+
+**Early vehicle pace.** Player vehicles have fixed speed stats. Players gain speed by unlocking or buying faster cars. Police and civilian NPC upgrades use explicitly authored speeds or fixed speed increases. Use these values directly across chapters, missions, and bonuses. Chapter 1 currently features player and patrol cars. Future civilian NPC speeds remain open. Verified locally on 26 November 2026. The catalog sets the Starter Coupe to 120, Street Coupe to 136, and City Hatchback to 116 world units per second. Each of the six Chapter 1 patrols uses an authored 54.4 world units per second. The active runtime and authored content have zero chapter, mission, or bonus speed multipliers. Both content validators and all 22 Node tests passed. Level Design verified that both coupes cleared all 21 main jobs and 21 bonuses with unchanged opening and patrol capture timing.
 
 The player starts with a Tier 1 car. **Canal Ward requires Tier 1, Neon Strip requires Tier 2, and Breakwater Port requires Tier 3.** A Tier 2 hatchback should feel like a stronger hatchback and still carry less than a Tier 2 van. Starting with Tier 2, offer an affordable entry car and let players earn cash through replays for vehicles they want. On a replay that allows vehicle selection, higher tiers are eligible in earlier areas if the vehicle matches the mission's category.
 

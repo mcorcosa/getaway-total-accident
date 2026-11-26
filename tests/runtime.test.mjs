@@ -5,7 +5,7 @@ import { fixtureChapter, fixtureWorld } from '../src/fixture.mjs';
 import { createGame } from '../src/game-state.mjs';
 import { SAVE_KEY, newProgress, progressStore } from '../src/save.mjs';
 import { validateChapter, validateChapterOneProgression, validateWorld } from '../src/schema.mjs';
-import { NEUTRAL_INPUT, startDrive, stepDrive } from '../src/simulation.mjs';
+import { NEUTRAL_INPUT, STEP, startDrive, stepDrive } from '../src/simulation.mjs';
 import { chooseVehicle, eligibleVehicles, STARTER_VEHICLE_ID, vehicles } from '../src/vehicles.mjs';
 import { inside, makeMap, onRoad, roadLine } from '../src/world.mjs';
 
@@ -190,6 +190,63 @@ test('steering, grip and braking affect motion, while one continuous wall contac
   const fragile = startDrive(wallRun.segment, map, vehicle, 1);
   for (let i = 0; i < 180 && !fragile.outcome; i += 1) stepDrive(fragile);
   assert.deepEqual(fragile.outcome, { kind: 'failure', reason: 'wrecked' });
+});
+
+test('a brief brake tap feathers speed while a held brake stops the car', () => {
+  function atCruisingSpeed() {
+    const drive = startDrive(first, map, vehicle);
+    drive.player.speed = 120;
+    return drive;
+  }
+
+  const tap = atCruisingSpeed();
+  for (let step = 0; step < 6; step += 1) stepDrive(tap, brake, STEP);
+  assert.equal(tap.player.speed, 87);
+  stepDrive(tap, NEUTRAL_INPUT, STEP);
+  assert.equal(tap.player.speed, 87 + vehicle.acceleration * STEP);
+
+  const hold = atCruisingSpeed();
+  for (let step = 0; step < 21; step += 1) stepDrive(hold, brake, STEP);
+  assert.equal(hold.player.speed, 4.5);
+  stepDrive(hold, brake, STEP);
+  assert.equal(hold.player.speed, 0);
+  assert.ok(Math.abs(hold.player.x - first.spawn.x - 20.825) < 1e-9);
+  const stopped = { ...hold.player };
+  stepDrive(hold, brake, STEP);
+  assert.deepEqual(hold.player, stopped);
+});
+
+test('partial steering produces a proportional turn and a gentler speed cap', () => {
+  const halfSteerSpeed = vehicle.speed * .835;
+  function advance(input) {
+    const drive = startDrive(first, map, vehicle);
+    drive.player.speed = halfSteerSpeed;
+    stepDrive(drive, { ...NEUTRAL_INPUT, ...input }, STEP);
+    return { turn: drive.player.heading - first.spawn.heading, speed: drive.player.speed };
+  }
+
+  const full = advance({ right: true });
+  const light = advance({ right: true, steering: .08 });
+  const half = advance({ right: true, steering: .5 });
+  const halfLeft = advance({ left: true, steering: -.5 });
+  assert.ok(full.turn > 0);
+  assert.ok(Math.abs(light.turn / full.turn - .08) < 1e-9);
+  assert.ok(Math.abs(half.turn / full.turn - .5) < 1e-9);
+  assert.ok(Math.abs(halfLeft.turn + half.turn) < 1e-9);
+  assert.ok(full.speed < half.speed && half.speed < light.speed);
+  assert.ok(Math.abs(half.speed - halfSteerSpeed) < 1e-9);
+  assert.equal(halfLeft.speed, half.speed);
+
+  const straight = advance({});
+  assert.deepEqual(advance({ left: true, right: true }), straight);
+  assert.deepEqual(advance({ right: true, steering: 0 }), straight);
+  assert.deepEqual(advance({ steering: 1 }), full);
+  assert.deepEqual(advance({ steering: 4 }), full);
+  assert.deepEqual(advance({ steering: -4 }), advance({ left: true }));
+  for (const invalid of [NaN, Infinity, -Infinity, '0.5', null]) {
+    assert.deepEqual(advance({ steering: invalid }), straight);
+    assert.deepEqual(advance({ steering: invalid, right: true }), full);
+  }
 });
 
 test('patrol starts behind the car, follows drivable corners, and needs sustained proximity to capture', () => {

@@ -3,15 +3,15 @@ export const STARTER_VEHICLE_ID = 'starter-coupe';
 export const vehicles = Object.freeze({
   [STARTER_VEHICLE_ID]: Object.freeze({
     name: 'Starter Coupe', category: 'coupe', tier: 1, maxDamage: 4,
-    speed: 150, acceleration: 255, turn: 3.45, grip: 12, length: 24, width: 13, color: '#FF4FA7',
+    speed: 120, acceleration: 204, turn: 3.45, grip: 12, length: 24, width: 13, color: '#FF4FA7',
   }),
   'street-coupe': Object.freeze({
     name: 'Street Coupe', category: 'coupe', tier: 2, maxDamage: 5,
-    speed: 170, acceleration: 275, turn: 3.6, grip: 13, length: 25, width: 13, color: '#34E7E1',
+    speed: 136, acceleration: 220, turn: 3.6, grip: 13, length: 25, width: 13, color: '#34E7E1',
   }),
   'city-hatchback': Object.freeze({
     name: 'City Hatchback', category: 'hatchback', tier: 1, maxDamage: 3,
-    speed: 145, acceleration: 280, turn: 3.8, grip: 15, length: 21, width: 12, color: '#FFD368',
+    speed: 116, acceleration: 224, turn: 3.8, grip: 15, length: 21, width: 12, color: '#FFD368',
   }),
 });
 

@@ -31,7 +31,7 @@ node --test --test-reporter=spec tests/browser/pages-smoke.test.mjs
 
 - Acceleration is automatic. The first mission can clear with hands off the controls.
 - Steer with **Left / Right** or **A / D**. Brake with **Down**, **S**, or **Space**.
-- On touch, drag the **bottom-right stick** left or right to steer. Release it to return to center. Hold the **left pedal** to brake. You can steer and brake together.
+- On touch, pull the **bottom-right steering wheel** sideways. A small pull turns gently. Pull farther to turn harder, then release to recenter. Hold the **left pedal** to brake. You can steer and brake together.
 - Pause with **Esc** or the on-screen **Pause** button.
 
 ## Run checks

@@ -12,12 +12,22 @@ const escapeAction = { driving: 'pause', pause: 'resume', briefing: 'home', 'bon
 const statusInput = new WeakMap();
 const steeringDeadZone = 7;
 
-function updateSteering(hold, x) {
+function updateSteering(hold, point) {
   const { center, travel } = hold;
-  const offset = clamp(x - center, -travel, travel);
-  if (offset === hold.offset) return false;
-  hold.offset = offset;
-  hold.direction = Math.abs(offset) <= steeringDeadZone ? null : offset < 0 ? 'left' : 'right';
+  let x = point.x - center.x;
+  let y = point.y - center.y;
+  const distance = Math.hypot(x, y);
+  if (distance > travel) {
+    x = (x / distance) * travel;
+    y = (y / distance) * travel;
+  }
+  if (hold.offset?.x === x && hold.offset?.y === y) return false;
+  const horizontal = Math.abs(x) - steeringDeadZone;
+  let magnitude = clamp(horizontal / (travel - steeringDeadZone), 0, 1);
+  // Subpixel pointer coordinates can leave a full horizontal throw fractionally below one.
+  if (1 - magnitude < 1e-9) magnitude = 1;
+  const steering = x < 0 && magnitude > 0 ? -magnitude : magnitude;
+  hold.offset = { x, y, steering };
   return true;
 }
 
@@ -146,9 +156,10 @@ export function gameUI(app, content, textures, game, effects) {
         focusCanvas();
         const hold = { id: e.pointerId, direction: control.drive };
         if (control.steeringTravel) {
-          hold.center = node.toGlobal({ x: node.hitArea.width / 2, y: 0 }).x;
+          const { width, height } = node.hitArea;
+          hold.center = node.toGlobal({ x: width / 2, y: height / 2 });
           hold.travel = control.steeringTravel;
-          updateSteering(hold, e.global.x);
+          updateSteering(hold, e.global);
         }
         effects.capture(e.pointerId);
         drivingPointers.set(kind, hold);
@@ -241,7 +252,7 @@ export function gameUI(app, content, textures, game, effects) {
   }
 
   function draw(input) {
-    drawDrive?.(input, drivingPointers.get('steer')?.offset ?? 0);
+    drawDrive?.(input, drivingPointers.get('steer')?.offset);
     effects.invalidate();
   }
 
@@ -344,8 +355,12 @@ export function gameUI(app, content, textures, game, effects) {
     const hold = drivingPointers.get('steer');
     if (!hold || hold.id !== event.pointerId) return;
     const bounds = canvas.getBoundingClientRect();
-    const x = (event.clientX - bounds.left) * app.screen.width / bounds.width;
-    if (updateSteering(hold, x)) draw(effects.input());
+    if (!bounds.width || !bounds.height) return;
+    const point = {
+      x: (event.clientX - bounds.left) * app.screen.width / bounds.width,
+      y: (event.clientY - bounds.top) * app.screen.height / bounds.height,
+    };
+    if (updateSteering(hold, point)) draw(effects.input());
   });
   canvas.addEventListener('wheel', event => {
     if (!map || event.ctrlKey) return;
@@ -358,6 +373,7 @@ export function gameUI(app, content, textures, game, effects) {
 
   return {
     show, draw, key, release,
+    steering: () => drivingPointers.get('steer')?.offset.steering ?? 0,
     *heldDirections() {
       for (const { direction } of drivingPointers.values()) {
         if (direction) yield direction;

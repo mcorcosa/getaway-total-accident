@@ -29,7 +29,10 @@ function start(app, gameUI, content, textures, attachObservation) {
 
   function input() {
     const active = new Set([...keys.values(), ...ui.heldDirections()]);
-    return { left: active.has('left'), right: active.has('right'), brake: active.has('brake') };
+    const left = active.has('left');
+    const right = active.has('right');
+    const steering = left || right ? Number(right) - Number(left) : ui.steering();
+    return { left: left || steering < 0, right: right || steering > 0, brake: active.has('brake'), steering };
   }
 
   function clearPointerInput() {

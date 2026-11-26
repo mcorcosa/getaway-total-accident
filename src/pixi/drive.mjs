@@ -1,3 +1,4 @@
+import { RoundedRectangle } from '../../vendor/pixi.mjs';
 import { button, clamp, colors, graphics, group, icon, panel, target, text } from './primitives.mjs';
 import { liveWorld } from './world-view.mjs';
 
@@ -45,74 +46,74 @@ function showBrakePedal(pedal, width, height) {
   };
 }
 
-function thumbCap(shape) {
-  return shape.moveTo(-10, -15).lineTo(10, -15).quadraticCurveTo(14, -15, 16, -10)
-    .quadraticCurveTo(20, 0, 16, 9).quadraticCurveTo(14, 14, 10, 14).lineTo(-10, 14)
-    .quadraticCurveTo(-14, 14, -16, 9).quadraticCurveTo(-20, 0, -16, -10)
-    .quadraticCurveTo(-14, -15, -10, -15).closePath();
-}
+function showSteeringWheel(base, center) {
+  const rim = center - 6;
+  graphics(base).circle(center, center, center - 1.5).fill({ color: 0x091721, alpha: .72 });
+  const wheel = group(base, 'steer-wheel', center, center);
+  graphics(wheel).circle(0, 0, rim + 3).stroke({ color: 0x07121a, width: 6 });
+  graphics(wheel).circle(0, 0, rim).stroke({ color: 0x537281, width: 5 });
+  graphics(wheel).circle(0, 0, rim + 2).stroke({ color: 0x8faebb, alpha: .67, width: 1 });
+  graphics(wheel).moveTo(-rim + 3, -14).quadraticCurveTo(-rim - 2, 0, -rim + 3, 14)
+    .moveTo(rim - 3, -14).quadraticCurveTo(rim + 2, 0, rim - 3, 14)
+    .stroke({ color: 0x9db5be, alpha: .72, width: 4, cap: 'round' });
+  graphics(wheel).moveTo(-rim + 5, -7).lineTo(-13, -3).lineTo(0, 6).lineTo(13, -3).lineTo(rim - 5, -7)
+    .moveTo(0, 6).lineTo(0, rim - 3)
+    .stroke({ color: 0x637f8c, width: 5, cap: 'round', join: 'round' });
+  const index = graphics(wheel).roundRect(-2, -rim - 3, 4, 10, 2).fill(0xffffff);
 
-function showSteeringStick(track, width, height) {
-  const center = width / 2;
-  const axisY = height / 2;
-  const railY = axisY + 4;
-  graphics(track).moveTo(24, railY).lineTo(width - 24, railY)
-    .stroke({ color: 0x07121b, alpha: .64, width: 10, cap: 'round' });
-  graphics(track).moveTo(26, railY).lineTo(width - 26, railY)
-    .stroke({ color: 0x90a7b4, alpha: .55, width: 1.25, cap: 'round' });
-  graphics(track).ellipse(center, railY, 13, 10).fill({ color: 0x0b1922, alpha: .79 })
-    .stroke({ color: 0x78939f, alpha: .72, width: 1 });
-  const throwBar = graphics(track).rect(0, -2, 1, 4).fill(0xffffff);
-  throwBar.position.set(center, railY);
-  const left = icon(track, 'left', 9, axisY, 24, 0xffffff);
-  const right = icon(track, 'right', width - 9, axisY, 24, 0xffffff);
-
-  const thumb = group(track, 'steer-thumb', center, axisY);
-  thumbCap(graphics(thumb)).fill({ color: 0x07121a, alpha: .91 }).y = 3;
-  thumbCap(graphics(thumb)).fill(0x283e49)
-    .stroke({ color: 0xa8c0c7, alpha: .94, width: 1.35 });
-  const engaged = thumbCap(graphics(thumb)).fill(0x18555d)
+  graphics(base).circle(center, center, 12).fill(0x142a35)
+    .stroke({ color: 0x6d8d9b, width: 1 });
+  const shaft = graphics(base).rect(0, -2.5, 1, 5).fill(0xffffff);
+  shaft.position.set(center, center);
+  const thumb = group(base, 'steer-thumb', center, center);
+  graphics(thumb).circle(0, 2, 14).fill({ color: 0x07121a, alpha: .9 });
+  graphics(thumb).circle(0, 0, 13.5).fill(0x2d4854)
+    .stroke({ color: 0xb0c9ce, width: 1.35 });
+  const active = graphics(thumb).circle(0, 0, 13.5).fill(0x1b5960)
     .stroke({ color: colors.aqua, width: 1.7 });
-  const grip = graphics(thumb).ellipse(0, 0, 10, 7).fill({ color: 0x101f29, alpha: .64 });
-  for (const x of [-5, 0, 5]) grip.circle(x, 0, 1.35);
+  const grip = graphics(thumb).circle(0, 0, 8).fill(0x1a303a);
+  for (const [x, y] of [[0, -4], [-4, 0], [4, 0], [0, 4]]) grip.circle(x, y, 1.3);
   grip.fill(0xb9d8d9);
 
-  return (held, offset) => {
-    const leftActive = offset < 0 && held.left;
-    const rightActive = offset > 0 && held.right;
-    engaged.visible = leftActive || rightActive;
-    left.tint = leftActive ? colors.aqua : colors.faded;
-    right.tint = rightActive ? colors.aqua : colors.faded;
-    throwBar.visible = offset !== 0;
-    throwBar.scale.x = offset;
-    throwBar.tint = engaged.visible ? colors.aqua : 0x819fae;
-    thumb.x = center + offset;
+  const centered = { x: 0, y: 0, steering: 0 };
+  return ({ x, y, steering } = centered) => {
+    const distance = Math.hypot(x, y);
+    active.visible = steering !== 0;
+    index.tint = active.visible ? colors.aqua : 0xc7d9dd;
+    shaft.visible = distance > 0;
+    shaft.scale.x = distance;
+    shaft.rotation = Math.atan2(y, x);
+    shaft.tint = active.visible ? colors.aqua : 0x88a7b4;
+    wheel.rotation = steering * .65;
+    thumb.position.set(center + x, center + y);
   };
 }
 
-function touchControls(parent, controls, width, top, height, safeArea) {
+function touchControls(parent, controls, width, bottom, stickSize, safeArea) {
   const footer = group(parent, 'driving-controls');
   const left = Math.max(12, safeArea.left + 8);
   const right = Math.max(12, safeArea.right + 8);
   const usable = width - left - right;
   const pedalWidth = clamp(usable * .24, 70, 92);
+  const pedalHeight = 58;
   const { node: pedal } = target(footer, controls, {
-    id: 'drive:brake', name: 'Brake', drive: 'brake', x: left, y: top, w: pedalWidth, h: height,
+    id: 'drive:brake', name: 'Brake', drive: 'brake', x: left, y: bottom - pedalHeight, w: pedalWidth, h: pedalHeight,
   });
-  const drawBrake = showBrakePedal(pedal, pedalWidth, height);
+  const drawBrake = showBrakePedal(pedal, pedalWidth, pedalHeight);
 
-  const stickWidth = clamp(usable * .48, 116, 196);
   const steer = target(footer, controls, {
-    id: 'drive:steer', name: 'Steer left or right', x: width - right - stickWidth, y: top, w: stickWidth, h: height,
+    id: 'drive:steer', name: 'Steer left or right', x: width - right - stickSize, y: bottom - stickSize,
+    w: stickSize, h: stickSize,
   });
-  const { node: track } = steer;
-  steer.steeringTravel = stickWidth / 2 - 31;
-  track.cursor = 'ew-resize';
-  const drawStick = showSteeringStick(track, stickWidth, height);
+  const center = stickSize / 2;
+  steer.steeringTravel = center - 16;
+  steer.node.hitArea = new RoundedRectangle(0, 0, stickSize, stickSize, center);
+  steer.node.cursor = 'grab';
+  const drawStick = showSteeringWheel(steer.node, center);
 
   return (held, offset) => {
     drawBrake(held.brake);
-    drawStick(held, offset);
+    drawStick(offset);
   };
 }
 
@@ -180,11 +181,12 @@ export function showDrive(parent, drive, { width, height }, controls, { touch, s
   });
 
   const keyY = height - 20 - 48;
-  const touchHeight = 58;
-  const footerTop = touch ? height - Math.max(14, safeArea.bottom + 10) - touchHeight : keyY - 23;
+  const stickSize = clamp(width * .27, 94, 110);
+  const touchBottom = height - Math.max(14, (safeArea?.bottom ?? 0) + 10);
+  const footerTop = touch ? touchBottom - stickSize : keyY - 23;
   let drawControls;
   if (touch && controls) {
-    drawControls = touchControls(parent, targets, width, footerTop, touchHeight, safeArea);
+    drawControls = touchControls(parent, targets, width, touchBottom, stickSize, safeArea);
   } else if (!touch) {
     drawControls = desktopControls(parent, targets, width, footerTop, keyY);
   }
