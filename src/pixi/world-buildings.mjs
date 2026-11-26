@@ -1,4 +1,4 @@
-import { Matrix } from '/vendor/pixi.mjs';
+import { Matrix } from '../../vendor/pixi.mjs';
 import { light, materials } from './world-materials.mjs';
 
 const roofColors = [0x638094, 0xad987e, 0x688499, 0x9e6d60, 0xbca487];

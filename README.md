@@ -25,6 +25,8 @@ node --test tests/browser/acceptance.test.mjs
 
 The browser suite uses an installed Edge, Chrome, or Chromium with a temporary profile. See the [build guide](docs/chapter-1-build.md) for controls, browser discovery, and the verified scope.
 
+For the static package and deployment workflow, see [GitHub Pages](docs/chapter-1-build.md#github-pages).
+
 ## Resume on another machine
 
 1. Open this checkout in the verified Codex sidebar project. The current local label is **Getaway Total Accident**. Use the [team roster](docs/team-roster.md) to verify the project binding.

@@ -1,4 +1,4 @@
-import { Sprite, Texture, TilingSprite } from '/vendor/pixi.mjs';
+import { Sprite, Texture, TilingSprite } from '../../vendor/pixi.mjs';
 
 export const waterColor = 0x071e29;
 

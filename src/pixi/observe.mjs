@@ -1,4 +1,4 @@
-import { Graphics, Sprite, Text, VERSION } from '/vendor/pixi.mjs';
+import { Graphics, Sprite, Text, VERSION } from '../../vendor/pixi.mjs';
 
 function point(node) {
   const p = node.toGlobal({ x: 0, y: 0 });

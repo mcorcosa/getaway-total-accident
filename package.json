@@ -1,6 +1,9 @@
 {
   "name": "getaway-total-accident",
   "private": true,
+  "scripts": {
+    "build:pages": "node scripts/build-pages.mjs"
+  },
   "dependencies": {
     "pixi.js": "8.23.0"
   }

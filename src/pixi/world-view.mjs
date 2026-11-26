@@ -1,4 +1,4 @@
-import { Container, Matrix } from '/vendor/pixi.mjs';
+import { Container, Matrix } from '../../vendor/pixi.mjs';
 import { driveFrame } from '../renderer.mjs';
 import { STEP } from '../simulation.mjs';
 import { colors, graphics, group, icon } from './primitives.mjs';

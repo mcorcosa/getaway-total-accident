@@ -15,6 +15,22 @@ Open [Chapter 1](http://127.0.0.1:8080/) in a browser. Use the HTTP address so t
 
 `index.html` hosts one focusable canvas. The server serves PixiJS `8.23.0` at `/vendor/pixi.mjs` from the locked local install. The normal URL loads authored content from `src/content/world.json` and `src/content/chapter1.json`. `?fixture=1` selects the engineering fixture with its own save key. `?observe=1` opt-in exposes read-only test observations. The rebuild’s save is scoped to the browser origin and profile. The legacy `heatwave-getaway-prototype.html` uses its own save key.
 
+## GitHub Pages
+
+Keep using `node scripts/serve.mjs` for local development. To package the static site from the project root, run:
+
+```sh
+npm ci
+npm run build:pages
+node --test --test-reporter=spec tests/browser/pages-smoke.test.mjs
+```
+
+The build writes `dist-pages/`, including Pixi and the authored Chapter 1 files. The static package disables the local fixture and observer modes. The smoke test starts its own local HTTP server at `/getaway-total-accident/`, checks that Pixi, mission data, and artwork load, then clears and banks Mission 1.
+
+The [GitHub Pages workflow](../.github/workflows/pages.yml) builds and runs the content and Node checks on pushes to `main` and when run manually from Actions. The workflow uploads and deploys the Pages artifact only from `main`. In the repository’s Pages settings, select **GitHub Actions** as the publishing source. [GitHub Pages source setup](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#publishing-with-a-custom-github-actions-workflow)
+
+Check the latest successful GitHub Pages deploy job in Actions to confirm publication. The project URL is [Getaway Total Accident on GitHub Pages](https://mcorcosa.github.io/getaway-total-accident/). Progress is browser-local and origin-specific. The hosted site starts with its own save, separate from the localhost save.
+
 ## Controls
 
 - Acceleration is automatic. The first mission can clear with hands off the controls.

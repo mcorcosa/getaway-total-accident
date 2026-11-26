@@ -1,4 +1,4 @@
-import { BufferImageSource, CanvasSource, Rectangle, Sprite, Texture } from '/vendor/pixi.mjs';
+import { BufferImageSource, CanvasSource, Rectangle, Sprite, Texture } from '../../vendor/pixi.mjs';
 import { vehicles } from '../vehicles.mjs';
 import { clamp, colors, fade, graphics, group, icon, money, panel, target, text } from './primitives.mjs';
 import { car } from './world-view.mjs';

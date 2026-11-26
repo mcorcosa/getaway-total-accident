@@ -1,4 +1,4 @@
-import { Container, FillGradient, Graphics, Rectangle, Sprite, Text } from '/vendor/pixi.mjs';
+import { Container, FillGradient, Graphics, Rectangle, Sprite, Text } from '../../vendor/pixi.mjs';
 
 export const colors = {
   night: 0x101c3a, paper: 0xfff2dc, faded: 0xc9daea, aqua: 0x34e7e1,

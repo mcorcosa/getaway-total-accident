@@ -8,7 +8,8 @@ const keyMap = new Map([
   ['ArrowDown', 'brake'], ['KeyS', 'brake'], ['Space', 'brake'],
 ]);
 const params = new URLSearchParams(location.search);
-const fixture = params.get('fixture') === '1';
+const localEngineering = !document.documentElement.hasAttribute('data-pages-build');
+const fixture = localEngineering && params.get('fixture') === '1';
 const canvas = document.getElementById('stage');
 
 function start(app, gameUI, content, textures, attachObservation) {
@@ -150,7 +151,7 @@ function resize(app) {
 }
 
 try {
-  const { Application } = await import('/vendor/pixi.mjs');
+  const { Application } = await import('../vendor/pixi.mjs');
   const app = new Application();
   await app.init({
     canvas, width: canvas.clientWidth, height: canvas.clientHeight, autoDensity: true,
@@ -166,11 +167,11 @@ try {
   statusScene(app, 'Loading Palmera Bay');
   try {
     const [content, textures] = await Promise.all([loadContent({ fixture }), loadImages()]);
-    const observer = params.get('observe') === '1' ? await import('./pixi/observe.mjs') : null;
+    const observer = localEngineering && params.get('observe') === '1' ? await import('./pixi/observe.mjs') : null;
     resize(app);
     start(app, gameUI, content, textures, observer?.attachObservation);
   } catch (error) {
-    const renderError = () => statusScene(app, 'Chapter 1 could not load', error.message, !fixture);
+    const renderError = () => statusScene(app, 'Chapter 1 could not load', error.message, localEngineering && !fixture);
     renderError();
     new ResizeObserver(() => { if (resize(app)) renderError(); }).observe(canvas);
   }

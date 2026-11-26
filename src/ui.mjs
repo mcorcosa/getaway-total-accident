@@ -1,4 +1,4 @@
-import { Rectangle } from '/vendor/pixi.mjs';
+import { Rectangle } from '../vendor/pixi.mjs';
 import { startDrive } from './simulation.mjs';
 import { vehicles } from './vehicles.mjs';
 import { showCard } from './pixi/card.mjs';
