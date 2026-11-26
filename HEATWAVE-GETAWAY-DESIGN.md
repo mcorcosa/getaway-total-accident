@@ -1,0 +1,187 @@
+# Getaway Totally Accidental game design
+
+**Working design.** Getaway Totally Accidental is a top-down arcade driving comedy about Nina and Ray, a criminal couple trying to make one big score in Palmera Bay with a series of very bad plans. Drive a short job, reach a safehouse, and decide whether to bank the take or risk it on another job. Banked money opens new areas and buys cars that change how you play.
+
+[Play the current prototype](heatwave-getaway-prototype.html). It includes the Story screen, four Canal Ward jobs, one bonus objective per run, and full-paying replays. You can buy a safehouse and Tier 2 coupe to enter a free-drive preview of Neon Strip. The preview reuses the Canal Ward roads with new colors. Progress saves in the browser when local storage is available. Later campaign jobs, the wider garage, cargo capacity, and regenerating lives are planned.
+
+The prototype still combines flavour and instructions and shows a payout confirmation. The revised screen flow below is planned.
+
+## Visual direction
+
+**Owner direction, revised 26 November 2026.** The Canal Ward gameplay image supplied by the owner in the Art Director chat is the visual reference. Use it directly in visual-generation prompts wherever relevant, including story postcards. Match its crisp, compact 3D geometry, consistent scale, and clean right-angle street and roof forms. Keep surfaces finely weathered and readable, with believable material response, natural light falloff, soft contact shadows, and restrained highlights. Clear forms, scale, and lighting carry the stylization.
+
+The Canal Ward gameplay reference uses a straight-down view and warm pools of amber light from streetlamps and windows against wet charcoal pavement and deep teal canal water. Other scenes and districts can vary the camera, palette, and lighting with owner approval.
+
+Present story panels as postcards. The owner accepted the close-up of Nina pointing at an envelope as the First Job opening artwork. The detailed postcard layout and framing treatment for other story scenes are open. The instructions postcard uses gameplay art that illustrates the objective. Ray drives, and Nina gives the missions. Preview dialogue is temporary.
+
+**Game UI palette.** Use Ocean Drive for the game UI: midnight blue `#101C3A`, neon aqua `#34E7E1`, and hot pink `#FF4FA7`, with marigold `#FFD368` from Sunset Motel. Make hot pink and marigold visibly prominent on story and instruction screens, with less blue and smaller blue surfaces. The approved gameplay reference still guides world materials, scene palettes, and lighting.
+
+## City and story
+
+Palmera Bay is a fictional South Florida city. The Canal Ward has low bridges, marina slips, and sun-bleached motels. The Neon Strip has hotel service lanes, event traffic, and a beach causeway. Breakwater Port has moving gates, loading yards, and cranes over the water. The three areas give the campaign distinct looks and different things to do behind the wheel.
+
+Author one shared map in reusable pieces. Each mission uses the portions it needs. Grow the map and plan its geography as new missions require space or connections. The district themes guide future additions. District layouts, map dimensions and topology, the first extension, and technical architecture remain open.
+
+The player drives as Ray. Nina finds and presents the jobs. Their old crew cut them out of a score. Nina wants enough money for them to leave town together. Ray wants to take one job big enough that the old crew hears about it. They both enjoy what they do, and either one can be the voice of caution depending on the job. Their disagreement becomes the player's choice at the final safehouse.
+
+Before each job, use separate flavour and instruction panels with short lines. The first sets up why Nina and Ray are there. Nina gives the driving objective in the second. After the job, the result panel reacts to what happened, including whether they caught the ferry, took the road exit, or got busted. During a chase, save the radio for a line that changes what the player should do.
+
+> **Nina** — Remember the guy who said we couldn't drive his car?  
+> **Ray** — Which guy?  
+> **Nina** — The one who just pulled into the marina.
+
+The current prototype still has dialogue from the earlier roles.
+
+## Campaign and gameplay
+
+Introduce a new objective or mechanic in a focused job, then give players multiple practice missions using the same rules. Keep the mechanics, hazards, restrictions, and failure conditions the same across those practice missions. Routes and pickup placements can vary within those rules. Difficulty can hold steady or ease during practice. Move on to mastery challenges and combinations of familiar systems after players have had time to practice. Expand the number of missions per chapter. For later chapters, practice counts, chapter mission counts, and mission order remain open. Define gameplay and the rules of each job before writing its story.
+
+Finish a main job once to unlock the next job in story order. The clear registers as soon as you meet the main objective, including reaching the finish point when there is one. District boundaries also require paid district access and a vehicle of the required tier.
+
+### Mission objectives
+
+1. **Collect and escape.** Collect the required package or packages, then reach the escape point.
+2. **Delivery.** Drive to the destination.
+3. **Survive pursuit.** Stay free through the pursuit timer. The mission can then direct the player to an exit.
+4. **Beat the time.** Reach the required destination before the deadline.
+5. **Ram and collect.** Knock loot loose from another car and collect it.
+6. **Tailing.** Follow another car while keeping it in sight.
+7. **Route manipulation.** Solve a route puzzle by changing which paths are available.
+8. **Race.** Race other cars in a sprint or on a circuit.
+9. **Ram and destroy.** Destroy other cars by ramming them.
+10. **Catch.** Pursue and catch another car, taking the role the police play in a chase.
+
+Escort missions are out of scope. A vehicle switch can be a scripted step within another objective. Cargo and capacity modify collection or delivery. Towing is a mechanic that can support an objective.
+
+### Mechanics and open rules
+
+Use automatic acceleration, left and right steering, braking, grip and skidding, and collisions. Players collect packages and reach destinations. Police, heat, and civilian traffic provide pressure. Navigation can use drawbridges, canal jumps, gates, barriers, and trains. Falling into water ends the attempt. Use timers for survival or deadline objectives, and keep the choice to bank the haul or risk it on one bonus.
+
+The prototype already exercises automatic driving, steering and braking, grip and skidding, collisions, pickups and destinations, the drawbridge, patrols and heat, traffic, survival and deadline timers, and the bank-or-risk choice. Canal jumps, water-fall failure, gates, barriers, trains, towing, and additional objective families are planned.
+
+Open gameplay rules include the catch win condition, race placement and circuit lap counts, vehicle destruction thresholds, and the details of canal jumps and towing.
+
+### Playable Canal Ward jobs
+
+**1. First Job — Get away with the cash.** Grab the $100, cross the drawbridge, and reach the safehouse. Crossing the middle bridge raises it behind you. After clearing the job, bank the $100 or risk it on a bonus pickup worth another $200. The pickup adds another bag and a second safehouse on the same map.
+
+**2. Wrong Keys — Deliver a stolen car to a garage.** Start behind the wheel of the stolen coupe with the garage marked and a four-pip damage meter. Drive the coupe into the garage's marked bay. Any remaining durability is enough to finish, and arriving with at least three pips pays a clean-delivery bonus. The shortest route crosses a tight marina block. Staying on wider roads gives you room to turn but gives patrols more time to catch up. Base payout **$200**.
+
+**3. Make Them Wait — Stay free for 40 seconds.** Start with a patrol already on your tail. Stay unbusted until the countdown hits zero, which marks a safehouse to finish the job. The game favors an exit ahead of you. Patrol pressure rises at 15 and 30 seconds if it hasn't already. A quiet block can buy you a breath, but parking there doesn't freeze the chase. The HUD shows **Survive 40s**, then switches to **Reach the safehouse**. Base payout **$250**.
+
+**4. Last Ferry — Escape before the ramp closes.** Start with the take already in the car. You have **30 seconds** to drive onto the ferry. The ramp is visible across the canal. Missing the ferry closes the fast escape and opens a longer road exit with **15 seconds** left. Reaching either exit wins. Missing both fails the job. Base payout **$350**, with a bonus for catching the ferry.
+
+### First playable Chapter 1
+
+The owner approved this 21-mission sequence on 26 November 2026 for the first playable Chapter 1 rebuild in Canal Ward. Mission names are working labels. All main jobs are untimed.
+
+Practice changes routes, approaches, or marker placements within the rules just learned. Keep the same patrol starting gap, speed, and capture rule across C1-14 to C1-18 and reuse that setup in C1-21. Street and landmark labels describe spatial needs. Grow the shared map as missions require it, and use placeholder story until gameplay and rules are settled.
+
+Playtesting will tune exact placements, patrol values, bonus balancing, and test payouts. Later chapters remain open.
+
+#### Reach the destination
+
+- **C1-01 Reach the Marker.** Start aligned with a visible finish marker on a straight street. Automatic acceleration alone carries Ray into it to clear the job. The route is straight and patrol-free.
+- **C1-02 Same Goal, New Street.** Repeat the short straight-to-marker drive on another street.
+- **C1-03 Down the Block.** Repeat the straight drive with the target farther down the block.
+
+#### Learn steering and braking
+
+- **C1-04 First Bend.** Follow a wide bend to a marked garage. Practice steering and braking with baseline grip and collision damage.
+- **C1-05 Left Turn.** Reach the garage via a broad left bend.
+- **C1-06 Right Turn.** Reach the garage via a broad right bend.
+- **C1-07 Two Streets.** Choose either of two wide streets to reach the garage.
+- **C1-08 Other Approach.** Reach a familiar garage from the opposite end of the block.
+
+#### Collect one package and escape
+
+- **C1-09 First Pickup.** Collect one marked package and then reach the safehouse.
+- **C1-10 Straight Pickup.** Collect the package on a straight street and reach the safehouse.
+- **C1-11 Pickup After Left.** Collect the package after a left bend and reach the safehouse.
+- **C1-12 Pickup After Right.** Collect the package after a right bend and reach the safehouse.
+- **C1-13 Second Safehouse.** Collect the package on a familiar street and reach a different marked safehouse.
+
+#### Deliver under pursuit
+
+- **C1-14 First Pursuit.** Reach a familiar garage with one patrol already following.
+- **C1-15 Second Garage.** Reach a different garage under the same pursuit rules.
+- **C1-16 Two Ways Out.** Take either familiar route to the garage under the same pursuit rules.
+- **C1-17 Different Start.** Reach a familiar garage from a different starting point under the same pursuit rules.
+- **C1-18 Delivery Revisited.** Repeat an earlier delivery route under the same pursuit rules.
+
+#### Revisit and combine
+
+- **C1-19 Quiet Delivery.** Reach an earlier garage from a different street in a patrol-free revisit.
+- **C1-20 Familiar Pickup.** Collect one package and reach a familiar safehouse in a patrol-free revisit.
+- **C1-21 Pickup Under Pursuit.** Collect one package and reach the safehouse with the same one-patrol setup used for delivery practice.
+
+### Working mission examples
+
+These ideas illustrate the objective families and mechanics. Assign them to chapters after the learning progression is decided.
+
+- **Shakedown** as a ram-and-collect example. Side bumps release bundles, and the player collects a bundle before reaching the safehouse.
+- **Valet Ticket** as a tailing example. Follow a rival to the correct hotel garage while keeping a workable distance.
+- **Gate Shift** as a route-puzzle example. Trigger two switches in an order that opens the preferred route to the exit.
+- **Switch Seats** as an escape with a scripted vehicle swap. The player completes the route across both vehicles while cash and heat carry over.
+- **Four on the Floor** as cargo collection or delivery with capacity limits. Its previous cross-category vehicle choice conflicts with the same-category briefing rule and remains open.
+- **Hook and Run** as delivery using towing. Towing behaviour and the eligibility of alternate truck models remain open.
+
+The working finale keeps the choice to bank and leave town or risk the haul on Ray's final job. Its campaign clear survives a bonus failure.
+
+## Planned screen flow
+
+### Home and Garage
+
+**Story is Home.** Players scroll through the chapters and city map to find and replay missions. Show Nina and Ray's current chapter, the bank balance, and the next district's cost when relevant. Group missions by district in story order. Cleared missions remain visible with a short objective, normal payout, best banked payout, **Replay**, and a **Recap** of Nina and Ray's exchange. The next available job offers **Continue**. Locked jobs show which job comes before them. On return after a clear, select the next available job.
+
+**Story map.** Use the full-bleed illustrated Palmera Bay map with a winding dotted path, numbered mission nodes, a district unlock on the path, and a bottom menu. The same map content must scroll vertically and join seamlessly at the loop. The approved reference is screenshot 2 in the owner’s 26 November 2026 correction in the Art Director chat, message `01a21712-9f74-7eb0-84c6-6776e61d6062`.
+
+Home provides access to the separate **Garage** screen, balance, **Shop**, **Daily Missions**, and other menu entries. The Garage shows owned vehicles. Shop and Daily Missions are confirmed Home entries. Their destination scope is open.
+
+Replays pay the normal base amount and can award the same additional cash as a first clear. Both are banked the same way. Any cleared job can help fund area access or a better car. Cleared areas remain available, and players can bring an eligible newer car to an earlier job that permits selection.
+
+### Mission panels and gameplay
+
+1. **Flavour.** Set up the job in a short story beat. Use the same postcard layout for flavour and instructions, with short lines and ideally one spoken line per panel.
+2. **Instructions.** Use a gameplay image that illustrates the objective. Nina gives the exact goal, the finish marker where applicable, any timer or damage rule, and a short hint when helpful. Show car selection here when the job permits it. A replay defaults to this panel.
+3. **Gameplay.** Keep the existing driving view and HUD. Show pause as a menu overlay on gameplay.
+4. **Success or failure.** Use the same result layout for both. Success offers exactly two actions, described below. Failure explains the specific cause and offers **Replay** or **Back to menu**, which returns to Story.
+
+**New district.** Use the shared flavour and instruction layout to introduce the area when it opens, with a short story beat where useful.
+
+### Mission vehicle selection
+
+A steal-a-vehicle mission locks the specified stolen vehicle. Other missions start with a mission default and, when selection is available, let the player choose an owned alternative from the same vehicle category as the default. The district's tier requirement still applies. Category describes the kind of vehicle. Tier determines district eligibility. How the default relates to ownership or loaners is open.
+
+### Success and bonus
+
+The success panel offers **Continue to Story** and the **bonus choice**. Continue immediately banks the haul and returns to Home in one action. The bonus choice opens a separate optional story and briefing panel in the shared flavour and instruction layout before driving resumes. Show the relevant timer, damage limit, or patrol count before the player commits. The follow-up is one tougher version of the same activity and uses the current car, map, and controls. Button copy is provisional.
+
+The Canal Ward bonuses begin at three patrols. **First Job** gives you 14 seconds to get another envelope to the south safehouse. **Wrong Keys** gives you 11 seconds to reach the second garage with at most one additional hit. **Make Them Wait** adds 25 seconds with faster patrols, then a safehouse exit. **Last Ferry** gives you 10 seconds to reach a single road exit. Damage and the unbanked haul carry into the bonus.
+
+Accepting puts the current haul back at risk. On bonus success, the total banks automatically and the player returns directly to Home. Home shows the updated balance for both banking paths. On bonus failure, the player loses the unbanked haul and one life and sees the same failure layout. Either way, the main job stays cleared and the next job stays unlocked. Each run offers at most one extra objective. At the finale, the same bank-or-bonus choice also determines the couple's ending.
+
+## Cars, cash, and lives
+
+Every vehicle has a **category** and a **tier**. The category tells you what the vehicle does well. The tier tells you which districts it qualifies for. Show both beside the speed, handling, damage resistance, and cargo stats. Vehicle categories include hatchback, coupe, supercar, van, and truck. Truck is one category with models ranging from pickups and off-road trucks to heavy work vehicles such as box trucks and tow trucks. How specialist jobs such as **Hook and Run** filter truck models for towing capability is open. Detailed category balance and truck model stats, handling, and cargo profiles are also open. Give each tier models in the same categories over time, so someone who likes the van can upgrade to a better van. Sample Tier 1 profiles:
+
+- **Hatchback.** Tightest turns, moderate top speed, **3 damage pips**, **1 crate**. Fits narrow lanes.
+- **Coupe.** Fast, stable on wider roads, **4 damage pips**, **2 crates**. An all-rounder for deliveries and escapes.
+- **Supercar.** Highest top speed and quickest acceleration, **2 damage pips**, **1 crate**. Best when there's room to build speed.
+- **Van.** Wide turns, lower top speed, **6 damage pips**, **4 crates**. Breaks through foam construction barriers without damage.
+
+Driving stays automatic. Steering turns the body first, and the tires pull the car's momentum around over the next few frames. The hatchback grips sooner than the coupes. Fast turns leave short skid marks. Hold **S** or **↓**, or drag down on the map, to brake before a corner.
+
+The player starts with a Tier 1 car. **Canal Ward requires Tier 1, Neon Strip requires Tier 2, and Breakwater Port requires Tier 3.** A Tier 2 hatchback should feel like a stronger hatchback and still carry less than a Tier 2 van. Starting with Tier 2, offer an affordable entry car and let players earn cash through replays for vehicles they want. On a replay that allows vehicle selection, higher tiers are eligible in earlier areas if the vehicle matches the mission's category.
+
+Light wall scrapes bleed speed. Hard wall hits and car collisions cost a damage pip, and a hard hit against a wall or civilian car can knock you off your line. Sustained contact counts as one impact. At zero pips the car is wrecked and the attempt ends. Main jobs start with a fresh car. A bonus contract keeps the damage if you stay in the same car. A vehicle swap gives you the condition shown on the new car. Show cargo as **2 / 4 crates**. Capacity applies to bulky pickups. Cash bags use no slots.
+
+Start with sparse civilian traffic and parked patrols off the opening route. Add more on later jobs. Driving close to a parked patrol raises heat by one and puts that car into the chase. Crashing into traffic also adds one heat and calls another patrol. Heat caps at five. The survival timer can bring heat up to its planned level and preserves heat you've already drawn from the streets.
+
+Banked cash buys district safehouses and cars. Show both requirements together on the next district card, for example **Neon Strip access $600 · Tier 2 car from $600**. As an initial economy test, banking all four Canal Ward base payouts earns **$900**. The **$1,200** combined cost leaves **$300** to earn by replaying an earlier job or banking optional objectives. A successful Last Ferry replay alone can cover the gap. Aim for a small number of successful replays at each area boundary, with more replay value for players who want several cars. Leave equipment purchases provisional until an optional arcade shooting job proves that aiming and steering are fun together.
+
+Test **five regenerating lives**, one back every **25 minutes**. A failed attempt costs one life, whether the cause is a bust, a wreck, or missing a hard objective deadline. Each attempt charges only once. Banking and completing jobs cost nothing. A practice route stays available at zero lives. Test any cash refill separately from area prices so a player can judge what they're giving up.
+
+## Next playable slice
+
+Use the four playable Canal Ward jobs to test Story, bonus decisions, and earning enough for a Tier 2 car and Neon Strip access. Use the results to inform playtest tuning for the approved first playable Chapter 1 sequence.
