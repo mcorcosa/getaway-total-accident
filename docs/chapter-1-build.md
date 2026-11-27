@@ -31,8 +31,9 @@ node --test --test-reporter=spec tests/browser/pages-smoke.test.mjs
 
 - Acceleration is automatic. The first mission can clear with hands off the controls.
 - Steer with **Left / Right** or **A / D**. Brake with **Down**, **S**, or **Space**.
-- On touch, put your thumb on the **center of the bottom-right wheel** and slide sideways for small corrections. Slide back to center to stop steering or past center to steer the other way. To rotate the wheel, start on the **outer rim** and drag around it. Steering keeps its direction past 180° and through a full turn. Turn back to ease off or lift your thumb to recenter. Hold the **left pedal** to brake while steering.
+- On touch in the **local prototype**, put your thumb anywhere on the **bottom-right steering pad** and slide sideways. A small slide turns gently. Return to where your thumb started horizontally or lift it to stop steering. Hold the **left pedal** to brake while steering.
 - Hold the brake to stop and stay stopped. Release it to move forward automatically.
+- As of 27 November 2026, the hosted GitHub Pages build uses the earlier steering wheel. Start on its center for sideways corrections or on its outer rim to rotate.
 - Pause with **Esc** or the on-screen **Pause** button.
 
 ## Run checks

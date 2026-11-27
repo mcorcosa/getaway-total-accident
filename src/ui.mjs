@@ -12,20 +12,6 @@ const escapeAction = { driving: 'pause', pause: 'resume', briefing: 'home', 'bon
 const statusInput = new WeakMap();
 const steeringDeadZone = 7;
 const touchDeadZone = 9;
-const rimGrabFraction = .70;
-const wheelHubRadius = 14;
-const wheelLock = Math.PI / 2;
-const wheelDeadZone = Math.PI / 36;
-
-function wheelDelta(previous, current) {
-  if (!previous || !current) return null;
-  const cross = previous.x * current.y - previous.y * current.x;
-  const dot = previous.x * current.x + previous.y * current.y;
-  const chord = Math.hypot(current.x - previous.x, current.y - previous.y);
-  // Ignore a straight crossing through the hub, even when no event lands inside it.
-  if (dot < 0 && Math.abs(cross) < wheelHubRadius * chord) return null;
-  return Math.atan2(cross, dot);
-}
 
 function pulledSteering(x, travel, touch) {
   const deadZone = touch ? touchDeadZone : steeringDeadZone;
@@ -36,29 +22,12 @@ function pulledSteering(x, travel, touch) {
   return x < 0 && magnitude > 0 ? -magnitude : magnitude;
 }
 
-function updateSteering(hold, point) {
-  const { center, travel } = hold;
-  const displacement = { x: point.x - center.x, y: point.y - center.y };
-  const distance = Math.hypot(displacement.x, displacement.y);
-  const x = distance > travel ? displacement.x / distance * travel : displacement.x;
-  const y = distance > travel ? displacement.y / distance * travel : displacement.y;
-  let steering;
-  if (hold.rotating) {
-    const rimPoint = distance >= wheelHubRadius ? displacement : null;
-    const delta = wheelDelta(hold.rimPoint, rimPoint) ?? 0;
-    hold.rimPoint = rimPoint;
-    hold.rotation += delta;
-    // The wheel art follows every turn. The car only takes a finite angle to reach full lock.
-    hold.turnAngle = clamp(hold.turnAngle + delta, -wheelLock, wheelLock);
-    const angle = Math.abs(hold.turnAngle);
-    steering = angle <= wheelDeadZone ? 0 : Math.sign(hold.turnAngle) * (angle - wheelDeadZone) / (wheelLock - wheelDeadZone);
-  } else {
-    steering = pulledSteering(x, travel, hold.touch);
-    hold.rotation = steering * .65;
-  }
-  const previous = hold.offset;
-  if (previous?.x === x && previous?.y === y && previous.steering === steering && previous.rotation === hold.rotation) return false;
-  hold.offset = { x, y, steering, rotation: hold.rotation, touch: hold.touch };
+function updateSteering(hold, pointerX) {
+  const { originX, travel } = hold;
+  const x = clamp(pointerX - originX, -travel, travel);
+  if (hold.offset.x === x) return false;
+  const { touch } = hold.offset;
+  hold.offset = { x, steering: pulledSteering(x, travel, touch), touch };
   return true;
 }
 
@@ -187,15 +156,9 @@ export function gameUI(app, content, textures, game, effects) {
         focusCanvas();
         const hold = { id: e.pointerId, direction: control.drive };
         if (control.steeringTravel) {
-          const { width, height } = node.hitArea;
-          hold.center = node.toGlobal({ x: width / 2, y: height / 2 });
+          hold.originX = e.global.x;
           hold.travel = control.steeringTravel;
-          hold.touch = e.pointerType === 'touch';
-          // Select the gesture at contact so an ordinary hub correction never acquires the rim.
-          hold.rotating = Math.hypot(e.global.x - hold.center.x, e.global.y - hold.center.y) >= width / 2 * rimGrabFraction;
-          hold.rotation = 0;
-          hold.turnAngle = 0;
-          updateSteering(hold, e.global);
+          hold.offset = { x: 0, steering: 0, touch: e.pointerType === 'touch' };
         }
         effects.capture(e.pointerId);
         drivingPointers.set(kind, hold);
@@ -391,12 +354,9 @@ export function gameUI(app, content, textures, game, effects) {
     const hold = drivingPointers.get('steer');
     if (!hold || hold.id !== event.pointerId) return;
     const bounds = canvas.getBoundingClientRect();
-    if (!bounds.width || !bounds.height) return;
-    const point = {
-      x: (event.clientX - bounds.left) * app.screen.width / bounds.width,
-      y: (event.clientY - bounds.top) * app.screen.height / bounds.height,
-    };
-    if (updateSteering(hold, point)) draw(effects.input());
+    if (!bounds.width) return;
+    const x = (event.clientX - bounds.left) * app.screen.width / bounds.width;
+    if (updateSteering(hold, x)) draw(effects.input());
   });
   canvas.addEventListener('wheel', event => {
     if (!map || event.ctrlKey) return;

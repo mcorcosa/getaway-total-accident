@@ -333,16 +333,16 @@ async function holdPoint(page, id, contactId) {
 
 function verifyTouchControls(view) {
   const brake = control(view, 'drive:brake');
-  const stick = control(view, 'drive:steer');
+  const pad = control(view, 'drive:steer');
   const { hudBottom } = playfield(view);
-  assert.ok(brake.interactive && stick.interactive);
+  assert.ok(brake.interactive && pad.interactive);
   assert.ok(brake.bounds.x > 0 && brake.bounds.x + brake.bounds.width < view.width / 2);
-  assert.ok(stick.bounds.x > view.width / 2 && stick.bounds.x + stick.bounds.width < view.width);
-  for (const { bounds } of [brake, stick]) {
+  assert.ok(pad.bounds.x > view.width / 2 && pad.bounds.x + pad.bounds.width < view.width);
+  for (const { bounds } of [brake, pad]) {
     assert.ok(bounds.height >= 44 && bounds.y > hudBottom && bounds.y + bounds.height < view.height);
   }
-  assert.ok(stick.bounds.width >= 90 && Math.abs(stick.bounds.width - stick.bounds.height) < .01);
-  assert.ok(Math.abs(brake.bounds.y + brake.bounds.height - stick.bounds.y - stick.bounds.height) < .01);
+  assert.ok(pad.bounds.width >= 108 && pad.bounds.width > pad.bounds.height * 1.8);
+  assert.ok(Math.abs(brake.bounds.y + brake.bounds.height - pad.bounds.y - pad.bounds.height) < .01);
   assert.equal(control(view, 'drive:left'), undefined);
   assert.equal(control(view, 'drive:right'), undefined);
 }
@@ -414,46 +414,51 @@ async function verifyNeighborhood(page, view) {
     `The frame shows roofs, closed pavement and a striped barricade: ${JSON.stringify({ pixels, closure })}`);
 }
 
-async function captureFirstBend(page, name, mobile) {
-  const segment = chapter.missions[3];
+async function captureFirstBend(page, name, mobile, segment = chapter.missions[3]) {
+  const prefix = `${name}-${segment.id.toLowerCase()}`;
   const briefing = await openMission(page, segment.id);
-  assert.ok(object(briefing, 'teaching-inset').visible);
-  assert.ok(object(briefing, 'context-streets').visible);
+  if (segment.id === 'C1-04') {
+    assert.ok(object(briefing, 'teaching-inset').visible);
+    assert.ok(object(briefing, 'context-streets').visible);
+  }
   await start(page);
   let releaseBrake = await holdBrake(page, mobile);
   await poll(async () => (await snapshot(page)).drive.player.speed === 0, 'brake to stop before sampling the closed junction');
   await settle(page);
   await verifyNeighborhood(page, await snapshot(page));
-  await shot(page, `${name}-c1-04-closed-junction`);
+  await shot(page, `${prefix}-closed-junction`);
   await releaseBrake();
   const approach = await poll(async () => {
     const view = await snapshot(page);
     const { player, objective } = view.drive;
     return player.y - objective.destination.y < 48 && view;
   }, 'approach the first bend under normal driving', straightDriveTimeout(segment));
-  assert.ok(approach.drive.player.speed >= .90 * 120, `First Bend entry speed was ${approach.drive.player.speed}`);
+  assert.ok(approach.drive.player.speed >= .90 * 120, `${segment.id} entry speed was ${approach.drive.player.speed}`);
   assert.ok(approach.drive.damage === 4);
   releaseBrake = await holdBrake(page, mobile);
   await poll(async () => (await snapshot(page)).drive.player.speed < 1, 'brake naturally at the first bend');
   const corner = await snapshot(page);
   assert.equal(corner.phase, 'driving');
   assert.equal(corner.drive.damage, 4);
-  await shot(page, `${name}-c1-04-approach`);
+  await shot(page, `${prefix}-approach`);
   const { player, objective } = corner.drive;
   const turnTo = Math.atan2(objective.destination.y - player.y, objective.destination.x - player.x);
+  const direction = Math.sign(headingDelta(turnTo, player.heading));
+  assert.equal(direction, segment.id === 'C1-05' ? -1 : 1);
+  const key = direction > 0 ? 'ArrowRight' : 'ArrowLeft';
   if (mobile) {
-    const stick = await holdPoint(page, 'steer', 2);
-    await contact(page, 'touchStart', [stick]);
-    await contact(page, 'touchMove', [{ ...stick, x: stick.x + 42 }]);
+    const pad = await holdPoint(page, 'steer', 2);
+    await contact(page, 'touchStart', [pad]);
+    await contact(page, 'touchMove', [{ ...pad, x: pad.x + direction * 42 }]);
   } else {
-    await page.key('ArrowRight', 'rawKeyDown');
+    await page.key(key, 'rawKeyDown');
   }
   await poll(async () => {
     const view = await snapshot(page);
-    return view.input.brake && view.input.steering === 1 && angleDifference(view.drive.player.heading, turnTo) < .10;
+    return view.input.brake && view.input.steering === direction && angleDifference(view.drive.player.heading, turnTo) < .10;
   }, 'turn toward the open street using the real steering control');
   if (mobile) await contact(page, 'touchEnd', [await holdPoint(page, 'steer', 2)]);
-  else await page.key('ArrowRight', 'keyUp');
+  else await page.key(key, 'keyUp');
   if (!mobile) {
     await settle(page);
     await poll(async () => (await snapshot(page)).drive.player.speed === 0, 'stop before sampling the water');
@@ -468,8 +473,8 @@ async function captureFirstBend(page, name, mobile) {
     const second = await sampleWater();
     const stationary = (await snapshot(page)).drive.player;
     assert.deepEqual([stationary.x, stationary.y, stationary.speed], [x, y, 0], 'The camera stays still between water samples');
-    await Promise.all([writeFile(join(evidence, `${name}-c1-04-water-shimmer-a.png`), first),
-      writeFile(join(evidence, `${name}-c1-04-water-shimmer-b.png`), second)]);
+    await Promise.all([writeFile(join(evidence, `${prefix}-water-shimmer-a.png`), first),
+      writeFile(join(evidence, `${prefix}-water-shimmer-b.png`), second)]);
     const motion = await pixelSamples(page, first, { kind: 'shift', x: 0, y: 0, width: clip.width, height: clip.height,
       next: second.toString('base64'), dy: 0 });
     assert.ok(motion.changed > .035 && motion.mean < 3, `Stationary viewing shows subtle moving water: ${JSON.stringify(motion)}`);
@@ -478,9 +483,9 @@ async function captureFirstBend(page, name, mobile) {
   const turned = await snapshot(page);
   assert.ok(angleDifference(turned.drive.player.heading, turnTo) < .22);
   assert.equal(visibleObjective(turned).label, 'world-destination');
-  await shot(page, `${name}-c1-04-corner`);
+  await shot(page, `${prefix}-corner`);
   const finished = await phase(page, 'success');
-  assert.equal(finished.drive.damage, 4, 'the full-speed First Bend clears in full condition');
+  assert.equal(finished.drive.damage, 4, `${segment.id} clears in full condition`);
 }
 
 function headingDelta(a, b) {
@@ -612,7 +617,7 @@ test('Authored M1 bonus success carries condition and automatically banks both p
   });
 });
 
-test('390×600 hub touches make small highway-speed corrections and countersteer through center', { timeout: 20000 }, async t => {
+test('390×600 pad drags make small highway-speed corrections and countersteer through center', { timeout: 20000 }, async t => {
   async function cruise(page) {
     await openMission(page, 'C1-01');
     await start(page);
@@ -699,72 +704,72 @@ test('390×600 hub touches make small highway-speed corrections and countersteer
   });
 });
 
-test('390×600 wheel tracks full circles in both directions and unwinds from lock', { timeout: 26000 }, async () => {
-  await inBrowser('mobile-wheel-arcs', { width: 390, height: 600, mobile: true }, async page => {
-    await openMission(page, 'C1-01');
-    await start(page);
-    const brake = await holdPoint(page, 'brake', 1);
-    const wheel = await holdPoint(page, 'steer', 2);
-    const rim = degrees => {
-      const angle = degrees * Math.PI / 180;
-      return { ...wheel, x: wheel.x + 42 * Math.sin(angle), y: wheel.y - 42 * Math.cos(angle) };
-    };
-    const indexAngle = view => {
-      const { position } = object(view, 'steer-index');
-      return Math.atan2(position.x - wheel.x, wheel.y - position.y);
-    };
-    await contact(page, 'touchStart', [brake]);
-    async function moveTo(point) {
-      await moveContacts(page, point);
-      const view = await snapshot(page);
-      assert.equal(view.input.brake, true);
-      return view;
-    }
+for (const [width, height] of [[390, 600], [320, 568]]) {
+  test(`${width}×${height} steering pad anchors at either edge and ignores vertical travel`, { timeout: 22000 }, async () => {
+    await inBrowser(`mobile-pad-edges-${width}`, { width, height, mobile: true }, async page => {
+      await openMission(page, 'C1-01');
+      await start(page);
+      await holdBrake(page, true);
+      await poll(async () => (await snapshot(page)).drive.player.speed === 0, 'the brake to park the car');
+      const parked = await snapshot(page);
+      verifyTouchControls(parked);
+      const { x, y, width: length, height: breadth } = control(parked, 'drive:steer').bounds;
+      const stopped = { ...neutral, brake: true };
+      const gains = [];
+      for (const anchor of [x + 2, x + length - 2]) {
+        const finger = { x: anchor, y: y + breadth / 2, id: 2 };
+        await contact(page, 'touchStart', [finger]);
+        let view = await snapshot(page);
+        assert.deepEqual(view.input, stopped, 'touch-down is neutral at either marked edge');
+        assert.equal(object(view, 'held:steer').visible, true);
+        verifyCenteredStick(view);
 
-    for (const direction of [1, -1]) {
-      await contact(page, 'touchStart', [rim(0)]);
-      assert.equal((await snapshot(page)).input.steering, 0, 'grabbing the rim starts neutral');
-      for (let degrees = 30; degrees <= 390; degrees += 30) {
-        const view = await moveTo(rim(direction * degrees));
-        const strength = direction * view.input.steering;
-        if (degrees === 30) assert.ok(strength > .24 && strength < .37);
-        else if (degrees === 60) assert.ok(strength > .55 && strength < .75);
-        else assert.ok(strength > .98, `${degrees}° in direction ${direction}`);
-        assert.ok(angleDifference(indexAngle(view), direction * degrees * Math.PI / 180) < .045,
-          `the wheel index tracks the finger at ${direction * degrees}°`);
-        if (degrees === 210) await shot(page, `mobile-390-wheel-arc-${direction > 0 ? 'clockwise' : 'counterclockwise'}`);
+        async function drag(dx, dy) {
+          const point = { ...finger, x: finger.x + dx, y: finger.y + dy };
+          assert.ok(point.x >= 0 && point.x < width && point.y >= 0 && point.y < height);
+          await moveContacts(page, point);
+          const moved = await snapshot(page);
+          assert.equal(moved.input.brake, true);
+          assert.equal(moved.drive.player.speed, 0);
+          assert.ok(Math.abs(steeringOffset(moved).y) < 1);
+          return moved;
+        }
+        view = await drag(0, -72);
+        assert.deepEqual(view.input, stopped, 'vertical movement outside the pad stays neutral');
+        verifyCenteredStick(view);
+        assert.deepEqual((await drag(8, -72)).input, stopped, 'the neutral band stays relative to touch-down');
+        const right = (await drag(15, -72)).input;
+        assert.ok(right.right && right.touchSteering && right.steering > .12 && right.steering < .26);
+        const left = (await drag(-15, -100)).input;
+        assert.ok(left.left && left.touchSteering && Math.abs(left.steering + right.steering) < .001);
+        gains.push(right.steering);
+        view = await drag(42, -72);
+        assert.deepEqual(view.input, { ...stopped, right: true, steering: 1, touchSteering: true });
+        await shot(page, `mobile-${width}-pad-${anchor < x + length / 2 ? 'left' : 'right'}-edge-lock`);
+        assert.deepEqual((await drag(-42, 18)).input, { ...stopped, left: true, steering: -1, touchSteering: true });
+        view = await drag(0, -40);
+        assert.deepEqual(view.input, stopped, 'returning to the original X clears a full pull');
+        verifyCenteredStick(view);
+        await contact(page, 'touchEnd', [finger]);
+        view = await snapshot(page);
+        assert.deepEqual(view.input, stopped);
+        assert.equal(object(view, 'held:steer').visible, false);
       }
+      assert.ok(Math.abs(gains[0] - gains[1]) < .001, 'both edges have the same proportional gain');
 
-      let view = await moveTo(wheel);
-      verifyCenteredStick(view);
-      assert.equal(view.input.steering, direction, 'crossing the hub does not manufacture a turn');
-      assert.ok(angleDifference(indexAngle(view), direction * 390 * Math.PI / 180) < .045);
-      view = await moveTo(rim(direction * 210));
-      assert.equal(view.input.steering, direction, 'leaving the hub reanchors the gesture');
-      view = await moveTo(rim(direction * 390));
-      assert.equal(view.input.steering, direction, 'a diametric jump is also a hub crossing');
-
-      view = await moveTo(rim(direction * 360));
-      assert.ok(direction * view.input.steering > .6 && direction * view.input.steering < .8);
-      view = await moveTo(rim(direction * 300));
-      assert.equal(view.input.steering, 0, 'unwinding 90° from lock brings the steering to neutral');
-      view = await moveTo(rim(direction * 270));
-      assert.ok(direction * view.input.steering < -.24, 'a further unwind reverses the steering sign');
-      await contact(page, 'touchEnd', [wheel]);
-      view = await snapshot(page);
-      assert.deepEqual(view.input, { ...neutral, brake: true });
-      verifyCenteredStick(view);
-      assert.ok(Math.abs(indexAngle(view)) < .02);
-    }
-    await contact(page, 'touchStart', [wheel]);
-    for (let degrees = 0; degrees <= 270; degrees += 15) await moveTo(rim(degrees));
-    assert.ok((await snapshot(page)).input.steering < -.98, 'a center grab keeps projecting horizontal displacement after a curved gesture');
-    const hubNeutral = await moveTo(wheel);
-    assert.deepEqual(hubNeutral.input, { ...neutral, brake: true });
-    await contact(page, 'touchEnd');
-    assert.deepEqual((await snapshot(page)).input, neutral);
+      const offCenter = { x: x + length * .71, y: y + 8, id: 2 };
+      await contact(page, 'touchStart', [offCenter]);
+      assert.deepEqual((await snapshot(page)).input, stopped);
+      await moveContacts(page, { ...offCenter, x: offCenter.x + 18, y: offCenter.y - 64 });
+      assert.ok((await snapshot(page)).input.right);
+      await contact(page, 'touchCancel');
+      const canceled = await snapshot(page);
+      assert.deepEqual(canceled.input, neutral);
+      verifyCenteredStick(canceled);
+      assert.equal(object(canceled, 'held:steer').visible, false);
+    });
   });
-});
+}
 
 test('The canvas scopes selection and cancels the trusted context menu on the game surface', { timeout: 18000 }, async () => {
   await inBrowser('canvas-selection', { width: 390, height: 600, mobile: true }, async page => {
@@ -847,7 +852,7 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
   });
 }
 
-test('390×600 wheel turns progressively through light, middle and edge pulls', { timeout: 24000 }, async t => {
+test('390×600 pad turns progressively through light, middle and full pulls', { timeout: 24000 }, async t => {
   await inBrowser('mobile-proportional-steering', { width: 390, height: 600, mobile: true }, async page => {
     await openMission(page, 'C1-01');
     await start(page);
@@ -898,19 +903,19 @@ test('390×600 wheel turns progressively through light, middle and edge pulls', 
     const vertical = await measureTurn(0, -67);
     assert.ok(Math.abs(vertical.rate) < .001);
     assert.equal(vertical.view.input.steering, 0);
-    const wheel = control(vertical.view, 'drive:steer').bounds;
-    const thumb = object(vertical.view, 'steer-thumb').position;
-    assert.ok(Math.abs(thumb.x - stick.x) < 1 && thumb.y < stick.y - 25);
-    const diagonal = await measureTurn(42, -42);
-    assert.ok(diagonal.view.input.steering > .4 && diagonal.view.input.steering < .8);
-    const diagonalThumb = object(diagonal.view, 'steer-thumb').position;
-    assert.ok(Math.abs(Math.hypot(diagonalThumb.x - stick.x, diagonalThumb.y - stick.y) - (stick.y - thumb.y)) < 1);
+    const pad = control(vertical.view, 'drive:steer').bounds;
+    verifyCenteredStick(vertical.view);
+    const diagonal = await measureTurn(22, -70);
+    assert.ok(Math.abs(diagonal.view.input.steering - middle.view.input.steering) < 1e-6);
+    assert.ok(Math.abs(diagonal.rate / middle.rate - 1) < .22);
+    const diagonalThumb = steeringOffset(diagonal.view);
+    assert.ok(Math.abs(diagonalThumb.x - 22) < 1 && Math.abs(diagonalThumb.y) < 1);
     const inside = await measureTurn(4);
     assert.ok(Math.abs(inside.rate) < .001);
     assert.equal(inside.view.input.steering, 0);
 
     await contact(page, 'touchEnd', [stick]);
-    const outside = { id: stick.id, x: wheel.x + 3, y: wheel.y + 3 };
+    const outside = { id: stick.id, x: pad.x - 3, y: stick.y };
     await contact(page, 'touchStart', [outside]);
     await moveContacts(page, { ...stick, x: stick.x + 30 });
     assert.deepEqual((await snapshot(page)).input, { ...neutral, brake: true });
@@ -948,7 +953,7 @@ test('390×600 touch steering crosses neutral and releases independently of the 
     await poll(async () => {
       const view = await snapshot(page);
       return view.input.brake && view.input.right && headingDelta(view.drive.player.heading, stopped.heading) > .25;
-    }, 'the braked car to turn right with the steering finger near the right rim');
+    }, 'the braked car to turn right on a full drag');
     view = await snapshot(page);
     assert.ok(steeringOffset(view).x > 30 && steeringOffset(view).x < right.x - stick.x);
     await shot(page, 'mobile-390-controls-steering-and-brake');
@@ -1101,7 +1106,7 @@ test('Mobile driving releases captured controls on lost capture, pause, resize, 
   });
 });
 
-test('Wider touch-capable driving offers the stick and brake and keeps keyboard input available', { timeout: 18000 }, async () => {
+test('Wider touch-capable driving offers the pad and brake and keeps keyboard input available', { timeout: 18000 }, async () => {
   await inBrowser('wide-touch-controls', { width: 900, height: 640 }, async page => {
     await openMission(page, 'C1-01');
     const desktop = await start(page);
@@ -1143,7 +1148,7 @@ test('Wider touch-capable driving offers the stick and brake and keeps keyboard 
 });
 
 for (const [width, height] of [[390, 600], [320, 568]]) {
-  test(`${width}×${height} leads all three opening drives from the edge cue to the on-road target`, { timeout: 65000 }, async () => {
+  test(`${width}×${height} leads all three opening drives to the target and clears both bends`, { timeout: 85000 }, async () => {
     await inBrowser(`mobile-markers-${width}`, { width, height, mobile: true }, async page => {
       await shot(page, `mobile-${width}-story`);
       const opening = chapter.missions.slice(0, 3);
@@ -1206,6 +1211,8 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
       }
       assert.deepEqual((await storage(page)).cleared, opening.map(({ id }) => id));
       await captureFirstBend(page, `mobile-${width}`, true);
+      await bank(page);
+      await captureFirstBend(page, `mobile-${width}`, true, chapter.missions[4]);
     });
   });
 }

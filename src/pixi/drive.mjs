@@ -1,6 +1,7 @@
-import { RoundedRectangle } from '../../vendor/pixi.mjs';
 import { button, clamp, colors, graphics, group, icon, panel, target, text } from './primitives.mjs';
 import { liveWorld } from './world-view.mjs';
+
+const touchControlHeight = 58;
 
 function hudBlock(root, label, x, y, w, h, tint, symbol) {
   const box = group(root, `hud:${label}`, x, y);
@@ -46,75 +47,62 @@ function showBrakePedal(pedal, width, height) {
   };
 }
 
-function showSteeringWheel(base, center) {
-  const rim = center - 6;
-  graphics(base).circle(center, center, center - 1.5).fill({ color: 0x091721, alpha: .72 });
-  const wheel = group(base, 'steer-wheel', center, center);
-  graphics(wheel).circle(0, 0, rim + 3).stroke({ color: 0x07121a, width: 6 });
-  graphics(wheel).circle(0, 0, rim).stroke({ color: 0x537281, width: 5 });
-  graphics(wheel).circle(0, 0, rim + 2).stroke({ color: 0x8faebb, alpha: .67, width: 1 });
-  graphics(wheel).moveTo(-rim + 3, -14).quadraticCurveTo(-rim - 2, 0, -rim + 3, 14)
-    .moveTo(rim - 3, -14).quadraticCurveTo(rim + 2, 0, rim - 3, 14)
-    .stroke({ color: 0x9db5be, alpha: .72, width: 4, cap: 'round' });
-  graphics(wheel).moveTo(-rim + 5, -7).lineTo(-13, -3).lineTo(0, 6).lineTo(13, -3).lineTo(rim - 5, -7)
-    .moveTo(0, 6).lineTo(0, rim - 3)
-    .stroke({ color: 0x637f8c, width: 5, cap: 'round', join: 'round' });
-  const index = graphics(wheel, 'steer-index').roundRect(-2, -5, 4, 10, 2).fill(0xffffff);
-  index.y = 2 - rim;
+function showSteeringPad(base, width, height, travel) {
+  const center = width / 2;
+  const axis = height / 2;
+  panel(base, 0, 0, width, height, 0x0b1923, 0x7794a2, 12, .84).label = 'steer-pad';
+  const held = graphics(base, 'held:steer').roundRect(1, 1, width - 2, height - 2, 11)
+    .fill({ color: 0x1b5960, alpha: .25 }).stroke({ color: colors.aqua, alpha: .85, width: 1.5 });
+  panel(base, center - travel - 3, axis - 4, 2 * travel + 6, 8, 0x111f2c, 0x617985, 4);
+  graphics(base).moveTo(center, axis - 20).lineTo(center, axis + 20)
+    .stroke({ color: 0x8faebb, alpha: .8, width: 1.5 });
+  const left = icon(base, 'left', 13, axis, 21, 0xffffff);
+  const right = icon(base, 'right', width - 13, axis, 21, 0xffffff);
 
-  graphics(base).circle(center, center, 12).fill(0x142a35)
-    .stroke({ color: 0x6d8d9b, width: 1 });
-  const shaft = graphics(base).rect(0, -2.5, 1, 5).fill(0xffffff);
-  shaft.position.set(center, center);
-  const thumb = group(base, 'steer-thumb', center, center);
-  graphics(thumb).circle(0, 2, 14).fill({ color: 0x07121a, alpha: .9 });
-  graphics(thumb).circle(0, 0, 13.5).fill(0x2d4854)
-    .stroke({ color: 0xb0c9ce, width: 1.35 });
-  const active = graphics(thumb).circle(0, 0, 13.5).fill(0x1b5960)
-    .stroke({ color: colors.aqua, width: 1.7 });
-  const grip = graphics(thumb).circle(0, 0, 8).fill(0x1a303a);
-  for (const [x, y] of [[0, -4], [-4, 0], [4, 0], [0, 4]]) grip.circle(x, y, 1.3);
-  grip.fill(0xb9d8d9);
+  const thumb = group(base, 'steer-thumb', center, axis);
+  panel(thumb, -13, -12, 26, 26, 0x050e15, undefined, 7, .8);
+  const grip = panel(thumb, -13, -14, 26, 26, 0x334e5c, 0xacc4cb, 7);
+  const ribs = graphics(thumb);
+  for (const x of [-5, 0, 5]) ribs.roundRect(x - .9, -6, 1.8, 10, .9);
+  ribs.fill(0xb9d8d9);
 
-  const centered = { x: 0, y: 0, steering: 0, rotation: 0 };
-  return ({ x, y, steering, rotation } = centered) => {
-    const distance = Math.hypot(x, y);
-    active.visible = steering !== 0;
-    index.tint = active.visible ? colors.aqua : 0xc7d9dd;
-    shaft.visible = distance > 0;
-    shaft.scale.x = distance;
-    shaft.rotation = Math.atan2(y, x);
-    shaft.tint = active.visible ? colors.aqua : 0x88a7b4;
-    wheel.rotation = rotation;
-    thumb.position.set(center + x, center + y);
+  return offset => {
+    const steering = offset?.steering ?? 0;
+    held.visible = Boolean(offset);
+    grip.tint = held.visible ? colors.aqua : 0xffffff;
+    left.tint = steering < 0 ? colors.aqua : colors.faded;
+    right.tint = steering > 0 ? colors.aqua : colors.faded;
+    thumb.x = center + (offset?.x ?? 0);
   };
 }
 
-function touchControls(parent, controls, width, bottom, stickSize, safeArea) {
+function touchControls(parent, controls, width, bottom, safeArea) {
   const footer = group(parent, 'driving-controls');
   const left = Math.max(12, safeArea.left + 8);
   const right = Math.max(12, safeArea.right + 8);
   const usable = width - left - right;
   const pedalWidth = clamp(usable * .24, 70, 92);
-  const pedalHeight = 58;
+  const top = bottom - touchControlHeight;
   const { node: pedal } = target(footer, controls, {
-    id: 'drive:brake', name: 'Brake', drive: 'brake', x: left, y: bottom - pedalHeight, w: pedalWidth, h: pedalHeight,
+    id: 'drive:brake', name: 'Brake', drive: 'brake', x: left, y: top, w: pedalWidth, h: touchControlHeight,
   });
-  const drawBrake = showBrakePedal(pedal, pedalWidth, pedalHeight);
+  const drawBrake = showBrakePedal(pedal, pedalWidth, touchControlHeight);
 
+  const padWidth = clamp(usable * .39, 108, 154);
+  const travel = clamp(width * .135 - 16, 31, 39);
+  // Reserve a full drag past the right edge of the pad before the safe-area gutter.
+  // Both directions use the same throw, even for a grab at the very edge.
   const steer = target(footer, controls, {
-    id: 'drive:steer', name: 'Steer left or right', x: width - right - stickSize, y: bottom - stickSize,
-    w: stickSize, h: stickSize,
+    id: 'drive:steer', name: 'Slide left or right to steer', x: width - right - travel - padWidth,
+    y: top, w: padWidth, h: touchControlHeight,
   });
-  const center = stickSize / 2;
-  steer.steeringTravel = center - 16;
-  steer.node.hitArea = new RoundedRectangle(0, 0, stickSize, stickSize, center);
-  steer.node.cursor = 'grab';
-  const drawStick = showSteeringWheel(steer.node, center);
+  steer.steeringTravel = travel;
+  steer.node.cursor = 'ew-resize';
+  const drawPad = showSteeringPad(steer.node, padWidth, touchControlHeight, travel);
 
   return (held, offset) => {
     drawBrake(held.brake);
-    drawStick(offset);
+    drawPad(offset);
   };
 }
 
@@ -182,12 +170,11 @@ export function showDrive(parent, drive, { width, height }, controls, { touch, s
   });
 
   const keyY = height - 20 - 48;
-  const stickSize = clamp(width * .27, 94, 110);
   const touchBottom = height - Math.max(14, (safeArea?.bottom ?? 0) + 10);
-  const footerTop = touch ? touchBottom - stickSize : keyY - 23;
+  const footerTop = touch ? touchBottom - touchControlHeight : keyY - 23;
   let drawControls;
   if (touch && controls) {
-    drawControls = touchControls(parent, targets, width, touchBottom, stickSize, safeArea);
+    drawControls = touchControls(parent, targets, width, touchBottom, safeArea);
   } else if (!touch) {
     drawControls = desktopControls(parent, targets, width, footerTop, keyY);
   }

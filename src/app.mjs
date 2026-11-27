@@ -34,10 +34,10 @@ function start(app, gameUI, content, textures, attachObservation) {
     const active = new Set([...keys.values(), ...ui.heldDirections()]);
     const left = active.has('left');
     const right = active.has('right');
-    const wheel = left || right ? undefined : ui.steeringInput();
-    const steering = wheel?.steering ?? Number(right) - Number(left);
+    const pad = left || right ? undefined : ui.steeringInput();
+    const steering = pad?.steering ?? Number(right) - Number(left);
     const held = { left: left || steering < 0, right: right || steering > 0, brake: active.has('brake'), steering };
-    if (wheel?.touch && steering) held.touchSteering = true;
+    if (pad?.touch && steering) held.touchSteering = true;
     return held;
   }
 
