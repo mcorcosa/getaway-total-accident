@@ -32,7 +32,7 @@ function pulledSteering(x, travel, touch) {
   const horizontal = Math.abs(x) - deadZone;
   let magnitude = clamp(horizontal / (travel - deadZone), 0, 1);
   if (1 - magnitude < 1e-9) magnitude = 1;
-  if (touch) magnitude *= .65 + .35 * magnitude;
+  if (touch) magnitude *= .70 + .30 * magnitude;
   return x < 0 && magnitude > 0 ? -magnitude : magnitude;
 }
 
