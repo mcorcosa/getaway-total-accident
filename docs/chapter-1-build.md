@@ -1,6 +1,6 @@
 # Chapter 1 build and checks
 
-The accepted Pixi Chapter 1 build opens the authored 21-mission Canal Ward sequence. Three straight-to-marker jobs lead into steering, pickup, and pursuit practice. Story dialogue is placeholder copy, and production world and failure art and detailed Garage visuals remain open. The player starts with one owned Starter Coupe. Vehicle eligibility is covered by tests. Shop, Daily Missions, and Chapter 2 are unavailable. This build runs locally. Platform SDK integration, final balance, and driving feel are pending. [26 November PM handoff](HANDOFF-2026-11-26.md)
+The accepted Pixi Chapter 1 build opens the authored 21-mission Canal Ward sequence. Missions 1 and 2 clear hands-off. In the local build, Mission 3 follows a straight street with a small right correction to a house-front finish. Bend practice starts at Mission 4, followed by pickup and pursuit practice. The Mission 3 change is pending release. Story dialogue is placeholder copy, and production world and failure art and detailed Garage visuals remain open. The player starts with one owned Starter Coupe. Vehicle eligibility is covered by tests. Shop, Daily Missions, and Chapter 2 are unavailable. This build runs locally. Platform SDK integration, final balance, and driving feel are pending. [26 November PM handoff](HANDOFF-2026-11-26.md)
 
 ## Run locally
 
@@ -29,7 +29,7 @@ node --test --test-reporter=spec tests/browser/pages-smoke.test.mjs
 
 ## Controls
 
-- Acceleration is automatic. The first mission can clear with hands off the controls.
+- Acceleration is automatic. Missions 1 and 2 can clear with hands off the controls.
 - Steer with **Left / Right** or **A / D**. Brake with **Down**, **S**, or **Space**.
 - On touch in the **local prototype**, put your thumb anywhere on the **bottom-right steering pad** and slide sideways. A small slide turns gently. Return to where your thumb started horizontally or lift it to stop steering. Hold the **left pedal** to brake while steering.
 - Hold the brake to stop and stay stopped. Release it to move forward automatically.

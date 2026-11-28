@@ -218,8 +218,14 @@ export function validateChapterOneProgression(chapter, world) {
     check(ahead > destination.radius, `${path}.objective.destination`, 'put the target ahead of the starting car');
     const miss = Math.sqrt(Math.max(0, gap ** 2 - ahead ** 2));
     const closest = behind(spawn, -ahead);
-    check(miss < destination.radius && roadLine(map, spawn, closest), `${path}.objective.destination`,
-      'missions 1–3 must be reachable by driving straight from spawn');
+    const straightApproach = roadLine(map, spawn, closest);
+    if (order <= 2) {
+      check(miss < destination.radius && straightApproach, `${path}.objective.destination`,
+        'missions 1–2 must be reachable by driving straight from spawn');
+    } else {
+      check(miss > destination.radius && straightApproach && roadLine(map, closest, destination),
+        `${path}.objective.destination`, 'mission 3 must require steering off its straight approach on drivable road');
+    }
   });
   return chapter;
 }

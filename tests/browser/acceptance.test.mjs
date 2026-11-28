@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { after, before, test } from 'node:test';
 import { setTimeout as delay } from 'node:timers/promises';
 import { gameServer } from '../../scripts/serve.mjs';
+import { driveFrame } from '../../src/renderer.mjs';
 import { SAVE_KEY } from '../../src/save.mjs';
 import { STARTER_VEHICLE_ID, vehicles } from '../../src/vehicles.mjs';
 import { launchBrowser, openPage, poll } from './cdp.mjs';
@@ -306,14 +307,16 @@ async function pixelSamples(page, image, request) {
       }
       return { buildings, streets, barricade };
     }
-    const swatch = samples.getImageData(Math.round(x) - 9, Math.round(y) - 9, 19, 19).data;
-    let match = 0;
     const a = kind === 'pink' ? 0 : 1;
     const c = kind === 'pink' ? 1 : 0;
-    for (let i = 0; i < swatch.length; i += 4) {
-      if (swatch[i + a] > 168 && swatch[i + 2] > 114 && swatch[i + c] < 143) match += 1;
-    }
-    return match;
+    return Math.max(...(request.centers ?? [{ x, y }]).map(({ x, y }) => {
+      const swatch = samples.getImageData(Math.round(x) - 9, Math.round(y) - 9, 19, 19).data;
+      let match = 0;
+      for (let i = 0; i < swatch.length; i += 4) {
+        if (swatch[i + a] > 168 && swatch[i + 2] > 114 && swatch[i + c] < 143) match += 1;
+      }
+      return match;
+    }));
   }, image.toString('base64'), request);
 }
 
@@ -372,23 +375,50 @@ function playfield(view) {
   return { hudBottom, footerTop };
 }
 
-function visibleObjective(view) {
+function fitsPlayfield({ x, y, width, height }, viewportWidth, { hudBottom, footerTop }) {
+  return y > hudBottom && y + height < footerTop && x >= 0 && x + width <= viewportWidth;
+}
+
+function visibleObjective(view, { allowGlowOverlap = false } = {}) {
   const mark = object(view, 'world-destination');
   const edge = object(view, 'edge-destination');
   assert.notEqual(mark.visible, edge.visible, 'Show one destination indicator at a time');
   const visible = mark.visible ? mark : edge;
-  const { y, height, x, width } = visible.bounds;
   const { hudBottom, footerTop } = playfield(view);
-  assert.ok(y > hudBottom && y + height < footerTop && x >= 0 && x + width <= view.width,
-    `The destination overlaps an overlay or viewport edge: ${JSON.stringify({ visible, hudBottom, footerTop })}`);
+  let bounds = visible.bounds;
+  if (mark.visible && allowGlowOverlap) {
+    const { player, objective: { destination } } = view.drive;
+    const { zoom } = driveFrame(view.width, view.height, player, destination, { hudBottom, footerTop });
+    const radius = (destination.radius + 1) * zoom;
+    bounds = { x: mark.position.x - radius, y: mark.position.y - radius, width: 2 * radius, height: 2 * radius };
+  }
+  assert.ok(fitsPlayfield(bounds, view.width, { hudBottom, footerTop }),
+    `The destination overlaps an overlay or viewport edge: ${JSON.stringify({ label: visible.label, bounds, hudBottom, footerTop })}`);
   return visible;
 }
 
-function waitForWorldDestination(page, id, timeout) {
+function waitForWorldDestination(page, id, timeout, { fullBounds = false } = {}) {
   return poll(async () => {
     const view = await snapshot(page);
-    return view.phase === 'driving' && object(view, 'world-destination').visible && view;
-  }, `${id} hands off naturally from the edge cue to the on-road marker`, timeout);
+    if (view.phase !== 'driving') return false;
+    const mark = object(view, 'world-destination');
+    if (!mark.visible) return false;
+    return (!fullBounds || fitsPlayfield(mark.bounds, view.width, playfield(view))) && view;
+  }, fullBounds ? `${id} marker and glow to move clear of the HUD` :
+    `${id} hands off naturally from the edge cue to the on-road marker`, timeout);
+}
+
+async function assertWorldMarkerPixels(page, mark) {
+  // Bracket the PNG with live positions, since capturing it spans several driving frames.
+  const screen = await page.pixels();
+  const after = object(await snapshot(page), mark.label);
+  assert.ok(after?.visible, 'The road marker is visible across screenshot capture');
+  const { x, y } = mark.position;
+  const dx = after.position.x - x;
+  const dy = after.position.y - y;
+  const steps = Math.max(1, Math.ceil(Math.hypot(dx, dy) / 6));
+  const centers = Array.from({ length: steps + 1 }, (_, index) => ({ x: x + dx * index / steps, y: y + dy * index / steps }));
+  assert.ok(await pixelSamples(page, screen, { kind: 'aqua', centers }) > 70);
 }
 
 async function verifyNeighborhood(page, view) {
@@ -482,7 +512,9 @@ async function captureFirstBend(page, name, mobile, segment = chapter.missions[3
   await releaseBrake();
   const turned = await snapshot(page);
   assert.ok(angleDifference(turned.drive.player.heading, turnTo) < .22);
-  assert.equal(visibleObjective(turned).label, 'world-destination');
+  visibleObjective(turned);
+  const onRoad = await waitForWorldDestination(page, segment.id, 1600, { fullBounds: true });
+  assert.equal(visibleObjective(onRoad).label, 'world-destination');
   await shot(page, `${prefix}-corner`);
   const finished = await phase(page, 'success');
   assert.equal(finished.drive.damage, 4, `${segment.id} clears in full condition`);
@@ -494,6 +526,58 @@ function headingDelta(a, b) {
 
 function angleDifference(a, b) {
   return Math.abs(headingDelta(a, b));
+}
+
+async function clearHouseMarker(page, opener, name, mobile) {
+  const { spawn, objective: { destination } } = opener;
+  const prefix = `${name}-${opener.id.toLowerCase()}`;
+  const clearMarker = await waitForWorldDestination(page, opener.id, 3000, { fullBounds: true });
+  assert.equal(visibleObjective(clearMarker).label, 'world-destination');
+  const finger = mobile ? await holdPoint(page, 'steer', 2) : null;
+  const approach = await poll(async () => {
+    const view = await snapshot(page);
+    return view.phase === 'driving' && view.drive.player.y <= destination.y + 93 && view;
+  }, 'reach the house block under neutral input', straightDriveTimeout(opener));
+  const { player } = approach.drive;
+  assert.deepEqual(approach.input, neutral);
+  assert.ok(Math.abs(player.x - spawn.x) < 2 && angleDifference(player.heading, spawn.heading) < .01);
+  assert.ok(spawn.y - player.y > .9 * (spawn.y - destination.y), 'The car drives most of the route straight north');
+  assert.ok(player.y - destination.y > 55 && player.speed >= .90 * vehicles[STARTER_VEHICLE_ID].speed);
+  assert.equal(approach.drive.damage, 4);
+
+  if (finger) {
+    await contact(page, 'touchStart', [finger]);
+    await contact(page, 'touchMove', [{ ...finger, x: finger.x + 21 }]);
+  } else {
+    await page.key('ArrowRight', 'rawKeyDown');
+  }
+  try {
+    const corrected = await poll(async () => {
+      const view = await snapshot(page);
+      return view.phase === 'driving' && view.input.right &&
+        headingDelta(view.drive.player.heading, spawn.heading) >= .19 && view;
+    }, 'make a small right correction toward the house marker', 1800);
+    assert.equal(corrected.input.brake, false);
+    if (finger) {
+      assert.ok(corrected.input.touchSteering && corrected.input.steering > .25 && corrected.input.steering < .65);
+    } else {
+      assert.equal(corrected.input.steering, 1);
+    }
+    assert.ok(headingDelta(corrected.drive.player.heading, spawn.heading) < .40);
+  } finally {
+    if (finger) await contact(page, 'touchEnd', [finger]);
+    else await page.key('ArrowRight', 'keyUp');
+  }
+
+  assert.deepEqual((await snapshot(page)).input, neutral);
+  await shot(page, `${prefix}-house-correction`);
+  const finished = await phase(page, 'success');
+  assert.equal(finished.drive.damage, 4);
+  const finish = finished.drive.player;
+  assert.ok(finish.x > spawn.x && finish.x >= destination.x - destination.radius && finish.y < player.y,
+    'The car moved north and right to reach the offset marker');
+  await shot(page, `${prefix}-house-clear`);
+  return finished;
 }
 
 test('Authored Home, briefing, paused driving, hands-off clear, bonus return and single bank', { timeout: 70000 }, async () => {
@@ -564,7 +648,7 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
     assert.deepEqual(onRoad.input, neutral);
     const mark = visibleObjective(onRoad);
     assert.equal(mark.label, 'world-destination');
-    assert.ok(await pixelSamples(page, await page.pixels(), { kind: 'aqua', ...mark.position }) > 70);
+    await assertWorldMarkerPixels(page, mark);
     await shot(page, 'desktop-c1-01-world-marker');
     const success = await phase(page, 'success');
     verifyDialog(success, ['Continue to Story', 'Bonus']);
@@ -590,8 +674,18 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
     assertNextMission(await reload(page, 'home'), mainPayout);
     for (const opener of otherOpeners) {
       await openMission(page, opener.id);
-      await start(page);
-      await phase(page, 'success', straightDriveTimeout(opener));
+      const active = await start(page);
+      if (opener.id === 'C1-03') {
+        assert.equal(visibleObjective(active).label, 'edge-destination');
+        const onRoad = await waitForWorldDestination(page, opener.id, straightDriveTimeout(opener));
+        const mark = visibleObjective(onRoad, { allowGlowOverlap: true });
+        assert.equal(mark.label, 'world-destination');
+        assert.ok(mark.position.x > object(onRoad, 'player-car').position.x + 4);
+        await shot(page, 'desktop-c1-03-world-marker');
+        await clearHouseMarker(page, opener, 'desktop', false);
+      } else {
+        await phase(page, 'success', straightDriveTimeout(opener));
+      }
       await bank(page);
     }
     await captureFirstBend(page, 'desktop', false);
@@ -1154,6 +1248,7 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
       const opening = chapter.missions.slice(0, 3);
       for (const opener of opening) {
         const { id, spawn, objective } = opener;
+        const houseMarker = id === 'C1-03';
         const preview = await openMission(page, id);
         assert.equal(Boolean(object(preview, 'teaching-inset')), id === 'C1-01');
         assert.equal(object(preview, 'drive:steer'), undefined);
@@ -1174,8 +1269,8 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
         const cue = visibleObjective(view);
         assert.equal(cue.label, 'edge-destination', `${id} starts with the longer target outside the playfield`);
         const car = object(view, 'player-car');
-        assert.ok(Math.abs(cue.position.x - car.position.x) < 4 && cue.position.y < car.position.y,
-          `${id} cue is straight ahead`);
+        assert.ok(Math.abs(cue.position.x - car.position.x) < (houseMarker ? 8 : 4) && cue.position.y < car.position.y,
+          `${id} cue points down the street`);
         const screen = await page.pixels();
         assert.ok(await pixelSamples(page, screen, { kind: 'aqua', ...cue.position }) > 70);
         assert.ok(await pixelSamples(page, screen, { kind: 'pink', ...car.position }) > 25);
@@ -1191,12 +1286,14 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
         }
         const onRoad = await waitForWorldDestination(page, id, straightDriveTimeout(opener));
         assert.deepEqual(onRoad.input, neutral);
-        const mark = visibleObjective(onRoad);
+        const mark = visibleObjective(onRoad, { allowGlowOverlap: houseMarker });
         assert.equal(mark.label, 'world-destination');
-        assert.ok(Math.abs(mark.position.x - object(onRoad, 'player-car').position.x) < 4);
-        assert.ok(await pixelSamples(page, await page.pixels(), { kind: 'aqua', ...mark.position }) > 70);
+        const markerOffset = mark.position.x - object(onRoad, 'player-car').position.x;
+        if (houseMarker) assert.ok(markerOffset > 4, 'The on-road marker is to the right of the lane center');
+        else assert.ok(Math.abs(markerOffset) < 4);
+        await assertWorldMarkerPixels(page, mark);
         if (id !== 'C1-02') await shot(page, `mobile-${width}-${id.toLowerCase()}-drive`);
-        const success = await phase(page, 'success');
+        const success = houseMarker ? await clearHouseMarker(page, opener, `mobile-${width}`, true) : await phase(page, 'success');
         assert.equal(object(success, 'drive:steer'), undefined);
         assert.equal(object(success, 'drive:brake'), undefined);
         if (id === 'C1-01') {

@@ -4,7 +4,7 @@
 
 The owner confirmed the current game name on 26 November 2026 in PM chat `01a2175b-11c4-7230-9b26-0216587bad64`, message `01a217bf-40d2-7ca1-950b-6f166c34226d`.
 
-The accepted Pixi Chapter 1 build carries forward the 21 authored Canal Ward missions. The first three are straight-to-marker jobs, followed by practice with steering, pickup, and pursuit. Run `npm ci`, then start `node scripts/serve.mjs` and open `http://127.0.0.1:8080/`. [Chapter 1 build guide](docs/chapter-1-build.md) · [26 November PM handoff](docs/HANDOFF-2026-11-26.md)
+The accepted Pixi Chapter 1 build carries forward the 21 authored Canal Ward missions. Missions 1 and 2 clear hands-off. In the local build, Mission 3 follows a straight street with a small right correction to a house-front finish. Bend practice starts at Mission 4, followed by pickup and pursuit practice. Level Design and Engineering verified the Mission 3 change locally on 27 November 2026. Release is pending. Run `npm ci`, then start `node scripts/serve.mjs` and open `http://127.0.0.1:8080/`. [Chapter 1 build guide](docs/chapter-1-build.md) · [26 November PM handoff](docs/HANDOFF-2026-11-26.md)
 
 Story dialogue is placeholder copy, and production art remains open. The Garage starts with one owned Starter Coupe. Shop, Daily Missions, and Chapter 2 are unavailable. Platform SDK work, final balance, and driving feel remain open.
 
@@ -85,7 +85,7 @@ The owner approved this 21-mission sequence on 26 November 2026 for the first pl
 
 Practice changes routes, approaches, or marker placements within the rules just learned. Keep the same patrol starting gap, speed, and capture rule across C1-14 to C1-18 and reuse that setup in C1-21. Street and landmark labels describe spatial needs. Grow the shared map as missions require it, and use placeholder story until gameplay and rules are settled. On C1-01 to C1-03, compact views can begin with a directional target cue that gives way to the world marker when it comes into view. Show nearby connected streets and houses or roofs beyond the mission’s drivable footprint. Mark closed streets clearly with barricades. Collision checks and patrol routing stay within the active road network.
 
-**Chapter 1 mission length.** Give players more active driving on the route, including in the very first missions and the shortest optional bonuses. Keep the approved mission order and same-rule practice. Exact route lengths and drive times are playtest values. Level Design verified the longer routes locally on 26 November 2026 in normal gameplay at 60 Hz. These Starter Coupe timings count active driving only. C1-01, C1-02, and C1-03 remain straight hands-off drives and went from 3.45, 4.48, and 4.60 seconds to 10.00, 10.92, and 12.68 seconds. The 21 main jobs went from 76.42 to 301.88 seconds combined and now run 10.00–19.90 seconds each. The 21 bonuses went from 38.33 to 137.58 seconds combined and now run 5.78–8.50 seconds each. C1-10 went from 1.22 to 11.85 seconds with the same single pickup, and C1-17 went from 0.77 to 15.27 seconds with the same patrol. Both coupes cleared all 42 segments and both branches of C1-07 and C1-16. The shared map gained eight reusable pieces and retained the original pieces.
+**Chapter 1 mission length.** Give players more active driving on the route, including in the very first missions and the shortest optional bonuses. Keep the approved mission order and same-rule practice. Exact route lengths and drive times are playtest values. Level Design verified the longer routes locally on 26 November 2026 in normal gameplay at 60 Hz. These Starter Coupe timings count active driving only. In that 26 November build, the three straight hands-off drives C1-01, C1-02, and C1-03 went from 3.45, 4.48, and 4.60 seconds to 10.00, 10.92, and 12.68 seconds. The 21 main jobs went from 76.42 to 301.88 seconds combined and ran 10.00–19.90 seconds each. The 21 bonuses went from 38.33 to 137.58 seconds combined and ran 5.78–8.50 seconds each. C1-10 went from 1.22 to 11.85 seconds with the same single pickup, and C1-17 went from 0.77 to 15.27 seconds with the same patrol. Both coupes cleared all 42 segments and both branches of C1-07 and C1-16. The shared map gained eight reusable pieces and retained the original pieces.
 
 Playtesting will tune exact placements, patrol values, bonus balancing, and test payouts. Later chapters remain open.
 
@@ -93,7 +93,7 @@ Playtesting will tune exact placements, patrol values, bonus balancing, and test
 
 - **C1-01 Reach the Marker.** Start aligned with the finish marker on a longer straight street. Automatic acceleration alone carries Ray into it to clear the job. The route is patrol-free.
 - **C1-02 Same Goal, New Street.** Repeat the straight drive on another street, with more room to get used to the car before reaching the marker.
-- **C1-03 Down the Block.** Repeat the longer straight drive with the target farther down the block.
+- **C1-03 Down the Block.** Follow the same straight northbound street, then steer slightly right near the end to reach the finish marker in front of a house.
 
 #### Learn steering and braking
 

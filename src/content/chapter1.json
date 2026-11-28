@@ -59,7 +59,7 @@
       "id": "C1-03",
       "title": "Down the Block",
       "flavour": "The next marker is farther down the block.",
-      "instructions": "Keep going straight north to the marker.",
+      "instructions": "Drive north, then steer a little right toward the marker in front of the house.",
       "minTier": 1,
       "defaultVehicleId": "starter-coupe",
       "allowVehicleSelection": true,
@@ -67,7 +67,7 @@
       "spawn": { "x": 128, "y": 1732, "heading": -1.5707963267948966 },
       "objective": {
         "kind": "delivery",
-        "destination": { "x": 128, "y": 224, "radius": 24 }
+        "destination": { "x": 150, "y": 253, "radius": 15 }
       },
       "payout": 100,
       "bonus": {

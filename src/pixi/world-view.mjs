@@ -1,5 +1,5 @@
 import { Container, Matrix } from '../../vendor/pixi.mjs';
-import { driveFrame } from '../renderer.mjs';
+import { driveFrame, markerGlowRadius, markerRingWidth } from '../renderer.mjs';
 import { STEP } from '../simulation.mjs';
 import { colors, graphics, group, icon } from './primitives.mjs';
 import { building, castShadow, grain } from './world-buildings.mjs';
@@ -434,8 +434,8 @@ function marker(parent, point, kind, label) {
   const node = group(parent, label, point.x, point.y);
   const tint = kind === 'pickup' ? colors.gold : colors.aqua;
   const g = graphics(node);
-  glow(g, 0, 0, 23, tint, .23);
-  g.circle(0, 0, point.radius).stroke({ color: tint, alpha: .77, width: 1.35 });
+  glow(g, 0, 0, markerGlowRadius, tint, .23);
+  g.circle(0, 0, point.radius).stroke({ color: tint, alpha: .77, width: markerRingWidth });
   g.circle(0, 0, 10).fill(tint);
   icon(node, kind, 0, 0, 15, colors.night);
   return node;
@@ -460,7 +460,7 @@ export function liveWorld(parent, drive, width, height, overlays) {
   return () => {
     const kind = objective.pickup && !drive.pickedUp ? 'pickup' : 'destination';
     const goal = objective[kind];
-    const { zoom, safe, view } = driveFrame(width, height, drive.player, goal, overlays);
+    const { zoom, safe, edge, view } = driveFrame(width, height, drive.player, goal, overlays);
     camera.position.set(-view.x * zoom, -view.y * zoom);
     camera.scale.set(zoom);
     drawWater(view, worldTime(drive));
@@ -483,9 +483,9 @@ export function liveWorld(parent, drive, width, height, overlays) {
     }
     const x = (goal.x - view.x) * zoom;
     const y = (goal.y - view.y) * zoom;
-    const { left, right, top, bottom } = safe;
-    if (x >= left - .01 && x <= right + .01 && y >= top - .01 && y <= bottom + .01) return;
+    if (x >= safe.left && x <= safe.right && y >= safe.top && y <= safe.bottom) return;
     marks[kind].visible = false;
+    const { left, right, top, bottom } = edge;
     const centerX = (left + right) / 2;
     const centerY = (top + bottom) / 2;
     const dx = x - centerX;

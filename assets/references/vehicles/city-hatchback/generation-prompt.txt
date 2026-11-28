@@ -1,0 +1,22 @@
+City Hatchback generation reference
+Status: Art Director selection for owner design review. Owner approval pending.
+
+Generator: Built-in ImageGen
+Style-only input: assets/references/canal-ward-gameplay-style.png
+Transparent background: false
+Selected source ID: exec-cf0e3404-b858-4131-82fc-4410516142bc
+
+Master: city-hatchback-turnaround.png
+Exact crops from the master:
+  city-hatchback-front-three-quarter.png (Garage)
+  city-hatchback-rear-three-quarter.png (Story)
+  city-hatchback-side-profile.png (side-profile reference)
+  city-hatchback-top-down.png (gameplay reference)
+
+Exact shared ImageGen prompt
+
+Use case: stylized-concept. Production design reference for an original arcade driving game, a coherent four-camera orthographic turntable board for ONE exact vehicle model. Attached Image 1 is style only: inherit the compact detailed-miniature stylized 3D geometry, disciplined surface response and grounded mild weathering of the Canal Ward world. Do not reuse any vehicle design or scene from the image. This takes place on an absolutely plain matte warm smoky-gray neutral studio backplate with soft large studio light and controlled reflections, no night lighting. No writing, lettering, branding, emblems, plates, model badge, people or scenery.
+
+Render the following ONE original affordable five-door compact city hatchback from four cameras, as though rotating cameras around the same rigged 3D model. Body proportions: approximately 21 length to 12 width in direct plan view before mirrors; tall upright roofline and squared rear cabin and hatch, short blunt hood, short overhangs, practical tall sidewalls and short wheelbase. It should feel inexpensive, everyday, chunky yet plausible, low mild weathering. Medium saturated solid tangerine burnt-orange paint, same paint across panels; body-color roof and mirror caps, graphite rubber window surrounds, distinct wide charcoal C-pillar treatment at the squared rear. On each flank, exactly two passenger doors with one small horizontal dark handle each, four side doors total, plus a broad upright tailgate with large nearly rectangular smoked hatch window and no spoiler. One subtle shoulder crease and a narrow low dark rocker. Same simple five broad-spoke dark silver stock wheels and tall black tyres on every visible wheel. Front: two little separate unlit rounded-rectangle clear headlights in square outer corners, thin charcoal grille and sturdy broad dark lower bumper insert. Rear: two little separate unlit rounded-rectangle red lamps near the outer corners at hatch base, separate from one another; grey-black lower bumper strip. Near rectangular glass with a subtle charcoal tint that does not change substantially with camera. The same window divisions, bumper mouldings, wheel design, wheelbase, colour, rounded-corner body, door shut lines and handle placement across frames. Keep the orange roof a simple undecorated panel. Realistic low-key styling consistent with the game reference, no sports-car styling.
+
+Use a generous 3:2 wide landscape canvas, absolutely clean 2×2 grid of four equally useful views, one centered whole vehicle per quadrant, margins and generous completely clear gutters, no dividing rules or markings; make each car fill roughly 70–75% of its own cell width with comfortable spare space, tiny soft contact shadows under wheel views only. Upper left: front-left three-quarter Garage hero, slightly elevated, enough flank to read two doors and clean front bumper, nose pointing toward the left page edge. Upper right: rear-left three-quarter story angle, similarly elevated, showing the exact same side doors and wheels, with distinctive squared hatch/lamp assembly visible. Lower left: clean exact perpendicular left-side orthographic elevation, front points screen RIGHT, no visible front face, rear face, or roof, the two wheel centers lie on the same level. Lower right: true perpendicular straight-down exact orthographic PLAN view, axle horizontal in the image, front lamps toward page RIGHT, red rear lamps toward page LEFT; centered perfectly bilaterally symmetric body outline, both mirrors equal, no front/rear faces, vertical door side face or perspective. No crops, no unwanted extra views. Main fidelity test is obvious identity as a single vehicle across every cell, with view geometry pin-sharp and an unambiguous plan-view nose.
