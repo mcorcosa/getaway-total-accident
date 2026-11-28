@@ -1,11 +1,14 @@
 import { Container, Matrix } from '../../vendor/pixi.mjs';
 import { driveFrame, markerGlowRadius, markerRingWidth } from '../renderer.mjs';
 import { STEP } from '../simulation.mjs';
+import { vehicles } from '../vehicles.mjs';
+import { getCityHatchbackTexture } from './assets.mjs';
 import { colors, graphics, group, icon } from './primitives.mjs';
 import { building, castShadow, grain } from './world-buildings.mjs';
 import { light, materials, sprite, waterColor, waterSurface } from './world-materials.mjs';
 
 const patrolCar = { length: 25, width: 13, color: '#b9d7ef' };
+const cityHatchbackPixelsPerUnit = 4;
 const animation = new WeakMap();
 const edges = [
   { axis: 'x', across: 'y', length: 'width', depth: 'height', sign: -1 },
@@ -381,7 +384,7 @@ function liveCar(parent, vehicle, label, police = false) {
     sprite(node, materials().wet, 0, width * .88, length * 1.87, width * 1.8, { tint: 0x4eafff, alpha: .53 });
   }
   light(node, -.9, 1.5, length * 1.60, width * 1.75, 0x070c13, .84);
-  const g = graphics(node);
+  const g = graphics(node, 'procedural-car-body');
   g.roundRect(-length * .51, -width * .53, length * 1.02, width * 1.11, 3.1).fill(0x141820);
   g.roundRect(-length / 2, -width / 2, length, width, 3).fill(color)
     .stroke({ color: 0xffffff, alpha: .36, width: .55 });
@@ -450,6 +453,7 @@ export function liveWorld(parent, drive, width, height, overlays) {
   const kinds = ['destination', ...(objective.pickup ? ['pickup'] : [])];
   const marks = Object.fromEntries(kinds.map(kind => [kind, marker(camera, objective[kind], kind, `world-${kind}`)]));
   const player = liveCar(camera, drive.vehicle, 'player-car');
+  let hatchbackFallback = drive.vehicle === vehicles['city-hatchback'] ? player.getChildByLabel('procedural-car-body') : null;
   const police = drive.patrol && liveCar(camera, patrolCar, 'patrol-car', true);
   const arrows = Object.fromEntries(kinds.map(kind => {
     const node = marker(parent, { x: 0, y: 0, radius: 12 }, kind, `edge-${kind}`);
@@ -476,6 +480,15 @@ export function liveWorld(parent, drive, width, height, overlays) {
       }
     }
     pose(player, drive.player);
+    if (hatchbackFallback) {
+      const texture = getCityHatchbackTexture();
+      if (texture) {
+        sprite(player, texture, 0, 0, texture.width / cityHatchbackPixelsPerUnit, texture.height / cityHatchbackPixelsPerUnit,
+          { label: 'city-hatchback-body' });
+        hatchbackFallback.destroy();
+        hatchbackFallback = null;
+      }
+    }
     if (police) pose(police, drive.patrol);
     for (const entry of kinds) {
       marks[entry].visible = entry === kind;

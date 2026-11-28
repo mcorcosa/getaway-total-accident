@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 
 const types = {
   html: 'text/html; charset=utf-8', css: 'text/css; charset=utf-8',
-  mjs: 'text/javascript; charset=utf-8', json: 'application/json; charset=utf-8', jpg: 'image/jpeg',
+  mjs: 'text/javascript; charset=utf-8', json: 'application/json; charset=utf-8', jpg: 'image/jpeg', png: 'image/png',
 };
 
 export function gameServer() {
@@ -12,7 +12,8 @@ export function gameServer() {
     const pathname = request.url.split('?')[0];
     const vendor = pathname === '/vendor/pixi.mjs';
     const file = vendor ? 'node_modules/pixi.js/dist/pixi.min.mjs' : pathname === '/' ? 'index.html' : pathname.slice(1);
-    const allowed = /^(?:index\.html|src\/(?:[\w-]+\/)*[\w-]+\.(?:mjs|css|json)|assets\/ui\/(?:palmera-bay|postcards\/(?:first-job|canal-ward|success|bonus))\.jpg)$/.test(file);
+    const allowed = file === 'assets/gameplay/canal-ward/cars/city-hatchback.png' ||
+      /^(?:index\.html|src\/(?:[\w-]+\/)*[\w-]+\.(?:mjs|css|json)|assets\/ui\/(?:palmera-bay|postcards\/(?:first-job|canal-ward|success|bonus))\.jpg)$/.test(file);
     if ((!vendor && !allowed) || !['GET', 'HEAD'].includes(request.method)) {
       response.writeHead(404).end('Not found');
       return;

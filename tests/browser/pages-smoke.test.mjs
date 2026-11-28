@@ -10,19 +10,22 @@ import { launchBrowser, openPage, poll } from './cdp.mjs';
 
 const artifact = new URL('../../dist-pages/', import.meta.url);
 const prefix = '/getaway-total-accident/';
+const hatchbackId = 'city-hatchback';
+const hatchbackArt = 'assets/gameplay/canal-ward/cars/city-hatchback.png';
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.mjs': 'text/javascript; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.jpg': 'image/jpeg',
+  '.png': 'image/png',
 };
 const expectedRequests = [
   '', 'src/app.mjs', 'src/styles.css', 'vendor/pixi.mjs',
   'src/content/chapter1.json', 'src/content/world.json',
   'assets/ui/palmera-bay.jpg', 'assets/ui/postcards/first-job.jpg',
   'assets/ui/postcards/canal-ward.jpg', 'assets/ui/postcards/success.jpg',
-  'assets/ui/postcards/bonus.jpg',
+  'assets/ui/postcards/bonus.jpg', hatchbackArt,
 ];
 
 function pagesServer(responses) {
@@ -73,10 +76,14 @@ test('Pages project URL serves Chapter 1 and banks an authored Mission 1 clear',
   const origin = `http://127.0.0.1:${server.address().port}`;
   for (const path of [
     '/', '/index.html', '/vendor/pixi.mjs', '/assets/ui/palmera-bay.jpg', '/src/content/world.json',
-    `${prefix}src/fixture.mjs`, `${prefix}src/pixi/observe.mjs`,
+    `/${hatchbackArt}`, `${prefix}src/fixture.mjs`, `${prefix}src/pixi/observe.mjs`,
   ]) {
     assert.equal((await fetch(origin + path)).status, 404, path);
   }
+  const hatchback = await fetch(origin + prefix + hatchbackArt);
+  assert.equal(hatchback.status, 200);
+  assert.equal(hatchback.headers.get('content-type'), 'image/png');
+  assert.deepEqual(Buffer.from(await hatchback.arrayBuffer()), await readFile(new URL(`../../${hatchbackArt}`, import.meta.url)));
   responses.length = 0;
 
   const evidence = await mkdtemp(join(await realpath(tmpdir()), 'gtc-pages-evidence-'));
@@ -113,6 +120,8 @@ test('Pages project URL serves Chapter 1 and banks an authored Mission 1 clear',
       }, 'Mission 1 clear and pending haul', 16000);
       assert.deepEqual(cleared.cleared, ['C1-01']);
       assert.equal(cleared.pending.missionId, 'C1-01');
+      assert.equal(cleared.pending.vehicleId, hatchbackId);
+      assert.deepEqual(cleared.ownedVehicleIds, [hatchbackId]);
       assert.equal(cleared.pending.haul, 100);
       assert.equal(cleared.bank, 0);
       await afterPaint(page);

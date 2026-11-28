@@ -88,6 +88,31 @@ function startMission(game, id = first.id) {
   assert.equal(game.dispatch('start'), true);
 }
 
+function chapterOneWithDefault(defaultVehicleId) {
+  return {
+    ...fixture,
+    chapter: {
+      ...fixtureChapter,
+      id: 'chapter-1',
+      missions: fixtureChapter.missions.map((mission, index) => ({
+        ...mission, id: `C1-0${index + 1}`, defaultVehicleId,
+      })),
+    },
+  };
+}
+
+function clearedSave(mission, overrides = {}) {
+  return {
+    ...newProgress(),
+    bank: 350,
+    cleared: [mission.id],
+    pending: {
+      missionId: mission.id, vehicleId: STARTER_VEHICLE_ID, haul: mission.payout, damage: 4, firstClear: true,
+    },
+    ...overrides,
+  };
+}
+
 test('normal mode requires authored JSON and fixture mode is explicit', async () => {
   const loaded = await loadContent({ fixture: true, fetcher: () => assert.fail('fixture requested authored files') });
   assert.deepEqual(loaded.chapter, fixtureChapter);
@@ -465,4 +490,178 @@ test('storage write errors preserve one in-memory bank and allow a durable retry
   driveUntilResult(unavailable);
   unavailable.dispatch('bank');
   assert.equal(unavailable.state.progress.bank, 100);
+});
+
+test('fresh Chapter 1 owns the authored Hatchback and restores its pending clear on reload', () => {
+  const storage = memoryStorage();
+  const content = chapterOneWithDefault('city-hatchback');
+  const [mission] = content.chapter.missions;
+  const game = makeGame(storage, content);
+  assert.deepEqual(game.state.progress.ownedVehicleIds, ['city-hatchback']);
+  assert.equal(storage.getItem(SAVE_KEY), null);
+  startMission(game, mission.id);
+  assert.equal(game.state.run.vehicleId, 'city-hatchback');
+  driveUntilResult(game);
+  const pending = { missionId: mission.id, vehicleId: 'city-hatchback', haul: mission.payout, damage: 3, firstClear: true };
+  assert.deepEqual(game.state.progress.pending, pending);
+  const reloaded = makeGame(storage, content);
+  assert.equal(reloaded.state.phase, 'success');
+  assert.deepEqual(reloaded.state.progress.pending, pending);
+  assert.deepEqual(reloaded.state.progress.ownedVehicleIds, ['city-hatchback']);
+  assert.equal(reloaded.dispatch('bank'), true);
+  assert.equal(makeGame(storage, content).state.progress.bank, mission.payout);
+});
+
+test('a legacy Starter Coupe clear banks once and replays start in the Hatchback', () => {
+  const storage = memoryStorage();
+  const content = chapterOneWithDefault('city-hatchback');
+  const [mission, next] = content.chapter.missions;
+  const saved = clearedSave(mission, { cleared: [mission.id, next.id] });
+  saved.pending.firstClear = false;
+  const raw = JSON.stringify(saved);
+  storage.setItem(SAVE_KEY, raw);
+
+  const game = makeGame(storage, content);
+  assert.equal(game.state.phase, 'success');
+  assert.equal(game.state.run.vehicleId, STARTER_VEHICLE_ID);
+  assert.equal(game.state.run.damage, 4);
+  assert.equal(game.state.run.firstClear, false);
+  assert.deepEqual(game.state.progress, { ...saved, ownedVehicleIds: [STARTER_VEHICLE_ID, 'city-hatchback'] });
+  assert.equal(storage.getItem(SAVE_KEY), raw);
+  assert.equal(game.dispatch('bank'), true);
+  assert.equal(game.dispatch('bank'), false);
+
+  const reloaded = makeGame(storage, content);
+  assert.equal(reloaded.state.phase, 'home');
+  assert.equal(reloaded.state.progress.bank, saved.bank + mission.payout);
+  assert.deepEqual(reloaded.state.progress.cleared, saved.cleared);
+  assert.deepEqual(reloaded.state.progress.ownedVehicleIds, [STARTER_VEHICLE_ID, 'city-hatchback']);
+  assert.equal(reloaded.dispatch('open', mission.id), true);
+  assert.equal(reloaded.dispatch('vehicle', STARTER_VEHICLE_ID), false);
+  assert.equal(reloaded.dispatch('start'), true);
+  assert.equal(reloaded.state.run.vehicleId, 'city-hatchback');
+  assert.equal(reloaded.state.run.damage, 3);
+});
+
+test('a legacy owned Street Coupe carries into the bonus with its original condition', () => {
+  const storage = memoryStorage();
+  const content = chapterOneWithDefault('city-hatchback');
+  const [mission] = content.chapter.missions;
+  const owned = [STARTER_VEHICLE_ID, 'street-coupe'];
+  const saved = clearedSave(mission, { ownedVehicleIds: owned });
+  saved.pending.vehicleId = 'street-coupe';
+  saved.pending.damage = 5;
+  delete saved.pending.firstClear;
+  storage.setItem(SAVE_KEY, JSON.stringify(saved));
+
+  const game = makeGame(storage, content);
+  assert.equal(game.state.phase, 'success');
+  assert.deepEqual(game.state.progress.pending, saved.pending);
+  assert.equal(game.dispatch('bonus'), true);
+  assert.equal(game.dispatch('cancel-bonus'), true);
+  assert.deepEqual(game.state.progress.pending, saved.pending);
+  assert.equal(game.dispatch('bonus'), true);
+  assert.equal(game.dispatch('start'), true);
+  assert.equal(game.state.run.vehicleId, 'street-coupe');
+  assert.equal(game.state.run.drive.damage, 5);
+  assert.equal(game.state.run.haul, mission.payout);
+  assert.equal(makeGame(storage, content).state.progress.bank, saved.bank);
+  driveUntilResult(game);
+  const reloaded = makeGame(storage, content);
+  assert.equal(reloaded.state.phase, 'home');
+  assert.equal(reloaded.state.progress.pending, null);
+  assert.equal(reloaded.state.progress.bank, saved.bank + mission.payout + mission.bonus.payout);
+  assert.deepEqual(reloaded.state.progress.ownedVehicleIds, [...owned, 'city-hatchback']);
+  assert.deepEqual(reloaded.state.progress.cleared, saved.cleared);
+});
+
+test('Chapter 1 migration checks original save ownership, payout, condition, tier and theft restrictions', () => {
+  const changes = [
+    ['unowned Coupe', saved => { saved.pending.vehicleId = 'street-coupe'; }],
+    ['unowned Hatchback', saved => { saved.pending.vehicleId = 'city-hatchback'; saved.pending.damage = 3; }],
+    ['missing legacy starter', saved => { saved.ownedVehicleIds = ['street-coupe', 'city-hatchback']; saved.pending.vehicleId = 'street-coupe'; }],
+    ['incorrect payout', saved => { saved.pending.haul += 1; }],
+    ['invalid condition', saved => { saved.pending.damage = 5; }],
+    ['invalid first clear', saved => { saved.pending.firstClear = 'yes'; }],
+    ['invalid bank', saved => { saved.bank = -1; }],
+    ['duplicate owned car', saved => { saved.ownedVehicleIds.push(STARTER_VEHICLE_ID); }],
+    ['unordered clears', saved => { saved.cleared.unshift('C1-02'); }],
+    ['higher required tier', (saved, mission) => { mission.minTier = 2; }],
+    ['fixed default with alternative', (saved, mission) => {
+      mission.allowVehicleSelection = false;
+      saved.ownedVehicleIds.push('street-coupe');
+      saved.pending.vehicleId = 'street-coupe';
+    }],
+    ['different theft target', (saved, mission) => { mission.stolenVehicleId = 'city-hatchback'; }],
+    ['mission outside original authored set', (saved, mission) => {
+      mission.id = 'C1-22';
+      saved.cleared = [mission.id];
+      saved.pending.missionId = mission.id;
+    }],
+  ];
+  for (const [reason, change] of changes) {
+    const content = chapterOneWithDefault('city-hatchback');
+    const [mission] = content.chapter.missions;
+    const saved = clearedSave(mission);
+    change(saved, mission);
+    const storage = memoryStorage();
+    const raw = JSON.stringify(saved);
+    storage.setItem(SAVE_KEY, raw);
+    const notices = [];
+    const game = makeGame(storage, content, { onNotice: message => notices.push(message) });
+    assert.equal(game.state.phase, 'home', reason);
+    assert.equal(game.state.progress.pending, null, reason);
+    assert.match(notices[0], /could not be read/, reason);
+    assert.equal(storage.getItem(SAVE_KEY), raw, reason);
+  }
+});
+
+test('unchanged Chapter 1 data, other chapters, and the fixture keep the Coupe starter and save isolation', () => {
+  const storage = memoryStorage();
+  const legacyChapter = chapterOneWithDefault(STARTER_VEHICLE_ID);
+  const [oldMission] = legacyChapter.chapter.missions;
+  assert.deepEqual(newProgress().ownedVehicleIds, [STARTER_VEHICLE_ID]);
+  assert.deepEqual(makeGame(storage, legacyChapter).state.progress, newProgress());
+  const otherChapter = chapterOneWithDefault('city-hatchback');
+  otherChapter.chapter.id = 'chapter-2';
+  assert.deepEqual(makeGame(storage, otherChapter).state.progress, newProgress());
+  const hatchbackChapter = chapterOneWithDefault('city-hatchback');
+  assert.deepEqual(makeGame(storage, hatchbackChapter, { fixture: true }).state.progress, newProgress());
+
+  const oldSave = clearedSave(oldMission);
+  const fixtureSave = clearedSave(first, { bank: 125 });
+  storage.setItem(SAVE_KEY, JSON.stringify(oldSave));
+  storage.setItem(`${SAVE_KEY}-fixture`, JSON.stringify(fixtureSave));
+  assert.deepEqual(makeGame(storage, legacyChapter).state.progress, oldSave);
+  const fixtureGame = makeGame(storage, fixture, { fixture: true });
+  assert.deepEqual(fixtureGame.state.progress, fixtureSave);
+  assert.equal(fixtureGame.dispatch('bank'), true);
+  assert.equal(makeGame(storage, fixture, { fixture: true }).state.progress.bank, fixtureSave.bank + first.payout);
+  assert.deepEqual(JSON.parse(storage.getItem(SAVE_KEY)), oldSave);
+});
+
+test('a failing storage write leaves the installed Coupe save recoverable until banking can persist', () => {
+  const storage = memoryStorage();
+  const content = chapterOneWithDefault('city-hatchback');
+  const [mission] = content.chapter.missions;
+  const saved = clearedSave(mission);
+  const raw = JSON.stringify(saved);
+  storage.setItem(SAVE_KEY, raw);
+  const write = storage.setItem;
+  storage.setItem = () => { throw new Error('quota'); };
+  const notices = [];
+  const game = makeGame(storage, content, { onNotice: message => notices.push(message) });
+  assert.equal(game.dispatch('bank'), true);
+  assert.equal(game.dispatch('bank'), false);
+  assert.equal(game.state.progress.bank, saved.bank + mission.payout);
+  assert.match(notices.at(-1), /could not save progress/);
+  assert.equal(storage.getItem(SAVE_KEY), raw);
+
+  const reloaded = makeGame(storage, content);
+  assert.equal(reloaded.state.phase, 'success');
+  assert.deepEqual(reloaded.state.progress.pending, saved.pending);
+  storage.setItem = write;
+  assert.equal(reloaded.dispatch('bank'), true);
+  assert.equal(makeGame(storage, content).state.progress.bank, saved.bank + mission.payout);
+  assert.deepEqual(makeGame(storage, content).state.progress.ownedVehicleIds, [STARTER_VEHICLE_ID, 'city-hatchback']);
 });

@@ -13,7 +13,10 @@ import { launchBrowser, openPage, poll } from './cdp.mjs';
 
 const mainPayout = 100;
 const bonusPayout = 50;
-const pendingMain = { missionId: 'C1-01', vehicleId: 'starter-coupe', haul: mainPayout, damage: 4 };
+const hatchbackId = 'city-hatchback';
+const hatchback = vehicles[hatchbackId];
+const damagedCondition = hatchback.maxDamage - 1;
+const pendingMain = { missionId: 'C1-01', vehicleId: hatchbackId, haul: mainPayout, damage: hatchback.maxDamage };
 const neutral = { left: false, right: false, brake: false, steering: 0 };
 const chapterUrl = new URL('../../src/content/chapter1.json', import.meta.url);
 const mission = id => `mission:${id}`;
@@ -72,10 +75,9 @@ async function phase(page, expected, timeout) {
   }
 }
 
-function straightDriveTimeout({ spawn, objective: { destination } }) {
+function straightDriveTimeout({ spawn, objective: { destination } }, vehicle = hatchback) {
   const distance = Math.hypot(destination.x - spawn.x, destination.y - spawn.y);
-  const { speed } = vehicles[STARTER_VEHICLE_ID];
-  return Math.ceil(distance * 1000 / speed + 4000);
+  return Math.ceil(distance * 1000 / vehicle.speed + 4000);
 }
 
 async function settle(page) {
@@ -307,13 +309,14 @@ async function pixelSamples(page, image, request) {
       }
       return { buildings, streets, barricade };
     }
-    const a = kind === 'pink' ? 0 : 1;
-    const c = kind === 'pink' ? 1 : 0;
     return Math.max(...(request.centers ?? [{ x, y }]).map(({ x, y }) => {
       const swatch = samples.getImageData(Math.round(x) - 9, Math.round(y) - 9, 19, 19).data;
       let match = 0;
       for (let i = 0; i < swatch.length; i += 4) {
-        if (swatch[i + a] > 168 && swatch[i + 2] > 114 && swatch[i + c] < 143) match += 1;
+        const [red, green, blue] = swatch.subarray(i, i + 3);
+        const painted = kind === 'orange' ? red > 150 && red - green > 45 && green - blue > 20 && blue < 90 :
+          green > 168 && blue > 114 && red < 143;
+        if (painted) match += 1;
       }
       return match;
     }));
@@ -332,6 +335,23 @@ async function moveContacts(page, ...touchPoints) {
 
 async function holdPoint(page, id, contactId) {
   return { ...await page.center(`drive:${id}`), id: contactId };
+}
+
+async function waitForHatchbackBody(page) {
+  const view = await poll(async () => {
+    const current = await snapshot(page);
+    return current.phase === 'driving' && object(current, 'city-hatchback-body')?.visible && current;
+  }, 'the orange City Hatchback sprite to appear');
+  const body = object(view, 'city-hatchback-body');
+  assert.equal(view.run.vehicleId, hatchbackId);
+  assert.equal(body.type, 'Sprite');
+  assert.equal(body.ancestor, 'player-car');
+  assert.equal(object(view, 'procedural-car-body'), undefined);
+  return view;
+}
+
+async function assertOrangeBody(page, pixels, car) {
+  assert.ok(await pixelSamples(page, pixels, { kind: 'orange', ...car.position }) > 25, 'The live Pixi car body is orange');
 }
 
 function verifyTouchControls(view) {
@@ -463,13 +483,13 @@ async function captureFirstBend(page, name, mobile, segment = chapter.missions[3
     const { player, objective } = view.drive;
     return player.y - objective.destination.y < 48 && view;
   }, 'approach the first bend under normal driving', straightDriveTimeout(segment));
-  assert.ok(approach.drive.player.speed >= .90 * 120, `${segment.id} entry speed was ${approach.drive.player.speed}`);
-  assert.ok(approach.drive.damage === 4);
+  assert.ok(approach.drive.player.speed >= .90 * hatchback.speed, `${segment.id} entry speed was ${approach.drive.player.speed}`);
+  assert.equal(approach.drive.damage, hatchback.maxDamage);
   releaseBrake = await holdBrake(page, mobile);
   await poll(async () => (await snapshot(page)).drive.player.speed < 1, 'brake naturally at the first bend');
   const corner = await snapshot(page);
   assert.equal(corner.phase, 'driving');
-  assert.equal(corner.drive.damage, 4);
+  assert.equal(corner.drive.damage, hatchback.maxDamage);
   await shot(page, `${prefix}-approach`);
   const { player, objective } = corner.drive;
   const turnTo = Math.atan2(objective.destination.y - player.y, objective.destination.x - player.x);
@@ -517,7 +537,7 @@ async function captureFirstBend(page, name, mobile, segment = chapter.missions[3
   assert.equal(visibleObjective(onRoad).label, 'world-destination');
   await shot(page, `${prefix}-corner`);
   const finished = await phase(page, 'success');
-  assert.equal(finished.drive.damage, 4, `${segment.id} clears in full condition`);
+  assert.equal(finished.drive.damage, hatchback.maxDamage, `${segment.id} clears in full condition`);
 }
 
 function headingDelta(a, b) {
@@ -542,8 +562,8 @@ async function clearHouseMarker(page, opener, name, mobile) {
   assert.deepEqual(approach.input, neutral);
   assert.ok(Math.abs(player.x - spawn.x) < 2 && angleDifference(player.heading, spawn.heading) < .01);
   assert.ok(spawn.y - player.y > .9 * (spawn.y - destination.y), 'The car drives most of the route straight north');
-  assert.ok(player.y - destination.y > 55 && player.speed >= .90 * vehicles[STARTER_VEHICLE_ID].speed);
-  assert.equal(approach.drive.damage, 4);
+  assert.ok(player.y - destination.y > 55 && player.speed >= .90 * hatchback.speed);
+  assert.equal(approach.drive.damage, hatchback.maxDamage);
 
   if (finger) {
     await contact(page, 'touchStart', [finger]);
@@ -572,7 +592,7 @@ async function clearHouseMarker(page, opener, name, mobile) {
   assert.deepEqual((await snapshot(page)).input, neutral);
   await shot(page, `${prefix}-house-correction`);
   const finished = await phase(page, 'success');
-  assert.equal(finished.drive.damage, 4);
+  assert.equal(finished.drive.damage, hatchback.maxDamage);
   const finish = finished.drive.player;
   assert.ok(finish.x > spawn.x && finish.x >= destination.x - destination.radius && finish.y < player.y,
     'The car moved north and right to reach the offset marker');
@@ -584,6 +604,7 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
   await inBrowser('desktop', {}, async page => {
     const [first, ...otherOpeners] = chapter.missions.slice(0, 3);
     const home = await snapshot(page);
+    assert.deepEqual(home.progress.ownedVehicleIds, [hatchbackId]);
     assert.equal(object(home, 'menu-title').text, 'PALMERA BAY');
     assert.equal(object(home, 'bank-balance').text, money(0));
     assert.equal(page.responses.get('/src/content/world.json'), 200);
@@ -609,12 +630,16 @@ test('Authored Home, briefing, paused driving, hands-off clear, bonus return and
     assert.equal(inset.type, 'Container');
     assert.ok(inset.visible && inset.bounds.width >= 55 && Math.abs(inset.bounds.width - inset.bounds.height) < 1);
     assert.equal(object(briefing, 'lesson-goal').type, 'Container');
-    assert.match(control(briefing, 'vehicle-picker').name, /Starter Coupe · Tier 1/);
+    assert.equal(briefing.run.vehicleId, hatchbackId);
+    assert.match(control(briefing, 'vehicle-picker').name, /City Hatchback · Tier 1/);
     await shot(page, 'desktop-briefing');
 
     await start(page);
     const releaseBrake = await holdBrake(page, false);
-    const launch = await snapshot(page);
+    const launch = await waitForHatchbackBody(page);
+    assert.equal(launch.drive.damage, hatchback.maxDamage);
+    assert.equal(launch.scene.filter(node => /^condition:\d+$/.test(node.label) && node.visible).length, hatchback.maxDamage);
+    await assertOrangeBody(page, await page.pixels(), object(launch, 'player-car'));
     assert.equal(visibleObjective(launch).label, 'edge-destination');
     await verifyNeighborhood(page, launch);
     await shot(page, 'desktop-c1-01-closed-junction');
@@ -702,12 +727,46 @@ test('Authored M1 bonus success carries condition and automatically banks both p
     await page.click(action('bonus'));
     await phase(page, 'bonus-briefing');
     const active = await start(page);
-    assert.equal(active.drive.damage, 4);
+    assert.equal(active.run.vehicleId, hatchbackId);
+    assert.equal(active.drive.damage, hatchback.maxDamage);
     assert.equal(active.run.bonus, true);
     assert.equal(active.progress.pending, null);
     await phase(page, 'home', straightDriveTimeout(first.bonus));
     await assertClear(page, mainPayout + bonusPayout, null);
     assertNextMission(await snapshot(page), mainPayout + bonusPayout);
+  });
+});
+
+test('An installed Coupe save keeps its garage and resumes the pending Coupe bonus after reload', { timeout: 24000 }, async () => {
+  await inBrowser('legacy-coupe-save', {}, async page => {
+    const first = chapter.missions[0];
+    const legacyVehicleId = 'street-coupe';
+    const priorSave = {
+      version: 1, bank: 275, cleared: ['C1-01', 'C1-02'],
+      ownedVehicleIds: [STARTER_VEHICLE_ID, legacyVehicleId],
+      pending: { ...pendingMain, vehicleId: legacyVehicleId, damage: 4, firstClear: false },
+    };
+    await page.read((key, save) => localStorage.setItem(key, JSON.stringify(save)), SAVE_KEY, priorSave);
+    const restored = await reload(page, 'success');
+    const ownedVehicleIds = [...priorSave.ownedVehicleIds, hatchbackId];
+    assert.deepEqual(restored.progress, { ...priorSave, ownedVehicleIds });
+    assert.equal(restored.run.vehicleId, legacyVehicleId);
+    await page.click(action('bonus'));
+    const briefing = await phase(page, 'bonus-briefing');
+    assert.equal(briefing.run.vehicleId, legacyVehicleId);
+    const active = await start(page);
+    assert.equal(active.run.vehicleId, legacyVehicleId);
+    assert.equal(active.run.bonus, true);
+    assert.equal(active.drive.damage, priorSave.pending.damage);
+    await shot(page, 'legacy-coupe-resumed-bonus');
+    const home = await phase(page, 'home', straightDriveTimeout(first.bonus, vehicles[legacyVehicleId]));
+    assert.deepEqual(home.progress, {
+      ...priorSave, ownedVehicleIds, pending: null, bank: priorSave.bank + first.payout + first.bonus.payout,
+    });
+    assert.deepEqual(await storage(page), home.progress);
+    await pressStoryKey(page, 'End');
+    await poll(async () => control(await snapshot(page), mission(first.id)).interactive, 'the Mission 1 replay on the Story map');
+    assert.equal((await openMission(page, first.id)).run.vehicleId, hatchbackId);
   });
 });
 
@@ -717,8 +776,8 @@ test('390×600 pad drags make small highway-speed corrections and countersteer t
     await start(page);
     const view = await poll(async () => {
       const scene = await snapshot(page);
-      return scene.phase === 'driving' && scene.drive.player.speed === 120 && scene;
-    }, 'Starter Coupe to reach cruise speed');
+      return scene.phase === 'driving' && scene.drive.player.speed === hatchback.speed && scene;
+    }, 'City Hatchback to reach cruise speed');
     return { course: view.drive.player.heading, finger: await holdPoint(page, 'steer', 2) };
   }
 
@@ -748,7 +807,7 @@ test('390×600 pad drags make small highway-speed corrections and countersteer t
 
     const pull = await sample();
     const yaw = headingDelta(pull.to.player.heading, pull.from.player.heading) * .2 / pull.seconds;
-    assert.ok(pull.from.player.speed >= .90 * 120);
+    assert.ok(pull.from.player.speed >= .90 * hatchback.speed);
     assert.ok(yaw > .025 && yaw < 5 * Math.PI / 180, `15 px at cruise should turn gently, measured ${yaw} radians in 200 ms`);
     assert.ok(pull.to.input.steering > .08 && pull.to.input.steering < .20);
     assert.equal(pull.to.input.touchSteering, true);
@@ -1032,10 +1091,11 @@ test('390×600 touch steering crosses neutral and releases independently of the 
     const right = { ...stick, x: stick.x + 48 };
     const left = { ...stick, x: stick.x - 47 };
     await contact(page, 'touchStart', [brake]);
-    await poll(async () => (await snapshot(page)).input.brake, 'touch brake');
+    const stopped = await poll(async () => {
+      const view = await snapshot(page);
+      return view.input.brake && view.drive.player.speed === 0 && view.drive.player;
+    }, 'the touch brake to bring the car to a full stop');
     assert.equal(object(await snapshot(page), 'held:brake').visible, true);
-    await delay(250);
-    const stopped = (await snapshot(page)).drive.player;
     await delay(250);
     assert.deepEqual((await snapshot(page)).drive.player, stopped);
     await contact(page, 'touchStart', [stick]);
@@ -1262,7 +1322,7 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
         assert.ok(Math.hypot(active.drive.player.x - spawn.x, active.drive.player.y - spawn.y) < 6);
         const releaseBrake = await holdBrake(page, true);
         await settle(page);
-        const view = await snapshot(page);
+        const view = await waitForHatchbackBody(page);
         assert.deepEqual([view.width, view.height], [width, height]);
         assert.match(object(view, 'objective-text').text, /reach the marker/i);
         assert.deepEqual(view.drive.objective, objective);
@@ -1273,7 +1333,7 @@ for (const [width, height] of [[390, 600], [320, 568]]) {
           `${id} cue points down the street`);
         const screen = await page.pixels();
         assert.ok(await pixelSamples(page, screen, { kind: 'aqua', ...cue.position }) > 70);
-        assert.ok(await pixelSamples(page, screen, { kind: 'pink', ...car.position }) > 25);
+        await assertOrangeBody(page, screen, car);
         if (id === 'C1-01') await verifyNeighborhood(page, view);
         if (id !== 'C1-02') await shot(page, `mobile-${width}-${id.toLowerCase()}-edge-cue`);
         await releaseBrake();
@@ -1348,7 +1408,7 @@ for (const [width, height] of [[320, 568], [390, 600]]) {
       await turnAcrossStreet(page, 0);
       const hit = await poll(async () => {
         const view = await snapshot(page);
-        return view.drive?.damage === 3 && object(view, 'objective-incident')?.visible && view;
+        return view.drive?.damage === damagedCondition && object(view, 'objective-incident')?.visible && view;
       }, 'a real road impact to show live condition feedback');
       const panel = object(hit, 'hud-panel:Objective');
       assert.equal(panel.type, 'Graphics');
@@ -1373,7 +1433,7 @@ test('An authored M1 bonus wreck loses the haul, preserves the main clear, and s
     await openMission(page, 'C1-01');
     await start(page);
     await turnAcrossStreet(page, 0);
-    await waitForCondition(page, 3);
+    await waitForCondition(page, damagedCondition);
     await turnAcrossStreet(page, Math.PI);
     await poll(async () => {
       const drive = (await snapshot(page)).drive;
@@ -1390,19 +1450,21 @@ test('An authored M1 bonus wreck loses the haul, preserves the main clear, and s
       if (legsLeft > 1) {
         await poll(async () => {
           const view = await snapshot(page);
-          assert.equal(view.drive.damage, 3, 'The car keeps its one impact on the way to the main finish');
+          assert.equal(view.drive.damage, damagedCondition, 'The car keeps its one impact on the way to the main finish');
           return view.drive.player.y <= nextY;
         }, 'drive to the next point on the opening street');
       }
     }
     await phase(page, 'success');
-    await assertClear(page, 0, { ...pendingMain, damage: 3 });
+    await assertClear(page, 0, { ...pendingMain, damage: damagedCondition });
     await page.click(action('bonus'));
     await phase(page, 'bonus-briefing');
-    await start(page);
-    await waitForCondition(page, 3);
+    const active = await start(page);
+    assert.equal(active.run.vehicleId, hatchbackId);
+    assert.equal(active.drive.damage, damagedCondition);
     await assertClear(page, 0, null);
-    for (const [heading, remaining] of [[.14, 2], [Math.PI - .14, 1], [.14, 0]]) {
+    for (let remaining = damagedCondition - 1; remaining >= 0; remaining -= 1) {
+      const heading = (damagedCondition - remaining) % 2 ? .14 : Math.PI - .14;
       await turnAcrossStreet(page, heading);
       await waitForCondition(page, remaining);
     }
@@ -1416,7 +1478,12 @@ test('An authored M1 bonus wreck loses the haul, preserves the main clear, and s
     assert.equal((await snapshot(page)).focus, action('replay'));
     await page.press('Enter');
     assert.equal((await phase(page, 'briefing')).run.missionId, 'C1-01');
+    const replay = await start(page);
+    assert.equal(replay.run.vehicleId, hatchbackId);
+    assert.equal(replay.drive.damage, hatchback.maxDamage);
     await page.press('Escape');
+    await phase(page, 'pause');
+    await page.click(action('home'));
     assertNextMission(await phase(page, 'home'), 0);
     await reload(page, 'home');
     await assertClear(page, 0, null);
@@ -1581,7 +1648,7 @@ test('Story clamps real wheel, touch, and keyboard input at Mission 1 and reache
     assert.equal((await phase(page, 'home')).focus, mission('C1-01'));
 
     for (const [slug, title, content] of [
-      ['garage', 'Garage', /Starter Coupe/],
+      ['garage', 'Garage', /City Hatchback/],
       ['shop', 'Shop', /unavailable/i],
       ['daily', 'Daily Missions', /unavailable/i],
     ]) {
@@ -1769,7 +1836,7 @@ test('The engineering fixture uses its missions and never modifies the authored 
     await page.press('Escape');
     assert.equal((await phase(page, 'home')).focus, mission('straight-delivery'));
     await openMission(page, 'straight-delivery');
-    await start(page);
+    assert.equal((await start(page)).run.vehicleId, STARTER_VEHICLE_ID);
     await phase(page, 'success');
     await bank(page);
     assert.equal(await storage(page), null);
@@ -1849,8 +1916,8 @@ test('Vehicle picker, viewport resize, and window focus release use real scene c
     await page.click('vehicle-picker');
     let view = await snapshot(page);
     assert.equal(control(view, 'vehicle-picker').expanded, true);
-    assert.equal(view.focus, 'vehicle:starter-coupe');
-    assert.equal(control(view, 'vehicle:starter-coupe').role, 'option');
+    assert.equal(view.focus, `vehicle:${hatchbackId}`);
+    assert.equal(control(view, `vehicle:${hatchbackId}`).role, 'option');
     await page.press('Enter');
     assert.equal(control(await snapshot(page), 'vehicle-picker').expanded, false);
     await page.send('Emulation.setDeviceMetricsOverride', {

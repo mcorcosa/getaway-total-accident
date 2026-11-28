@@ -2,6 +2,12 @@
 
 Use this guide to start a project with separate chats for ownership, management, implementation, and documentation. Give each chat a role, the project context it needs, and a clear reporting destination.
 
+## Shared development server
+
+Use one owner-facing development origin for this checkout on LAN port **8080**, currently [192.168.1.138:8080](http://192.168.1.138:8080/). Inspect and reuse the existing project listener. Reload the browser to pick up working files. Restart the same listener in place only when server code or asset routing changes require it. Keep the same address and port so the browser keeps the same save origin.
+
+Use routes or query parameters on that origin for owner playtests and optional previews. Use an isolated save when a preview needs separate progress. If another process owns port 8080, report the conflict and leave the shared URL in place. Short-lived automated loopback fixtures may use their own ports and must clean up after the test. Use the [LAN runbook](chapter-1-build.md#run-locally) to inspect or reopen the shared server.
+
 ## Moving or restoring the project
 
 On a new machine or checkout, read the [migration handoff](MIGRATION-HANDOFF.md) and verify the current workspace and exact sidebar project binding for **Getaway Total Accident**. Use the [PM startup prompt](PROJECT-MANAGER-START-PROMPT.md) to restore a missing PM chat. The [team roster](team-roster.md) describes role startup and the registry for verified active routes. Its original-host IDs are provenance until the current checkout, project binding, and direct messaging are verified.

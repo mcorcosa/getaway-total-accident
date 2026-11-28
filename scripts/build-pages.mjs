@@ -28,6 +28,7 @@ const copied = [
   'src/ui.mjs',
   'src/vehicles.mjs',
   'src/world.mjs',
+  'assets/gameplay/canal-ward/cars/city-hatchback.png',
   'assets/ui/palmera-bay.jpg',
   'assets/ui/postcards/bonus.jpg',
   'assets/ui/postcards/canal-ward.jpg',

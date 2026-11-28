@@ -239,6 +239,39 @@
       },
       "repeatAxes": [],
       "sha256": "1cabd6db8b3ac207a4fc2595354fd4a0ee1e711e95dee710002439ebdc6229aa"
+    },
+    {
+      "id": "city-hatchback",
+      "category": "car",
+      "file": "cars/city-hatchback.png",
+      "widthPx": 90,
+      "heightPx": 54,
+      "pixelsPerUnit": 4,
+      "nominalFootprintUnits": {
+        "width": 21,
+        "height": 12,
+        "bounds": {
+          "minX": -10.5,
+          "minY": -6,
+          "maxX": 10.5,
+          "maxY": 6
+        },
+        "anchor": {
+          "x": 0,
+          "y": 0
+        }
+      },
+      "pivotPx": {
+        "x": 45,
+        "y": 27
+      },
+      "sourceOrientation": {
+        "view": "top-down",
+        "facing": "east",
+        "headingRad": 0
+      },
+      "repeatAxes": [],
+      "sha256": "9d02437e129618fa11770b7f01436b11130a8a3b6e4da0ed50bfe689f7b20586"
     }
   ]
 }

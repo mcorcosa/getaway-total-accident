@@ -1,23 +1,32 @@
 # Chapter 1 build and checks
 
-The accepted Pixi Chapter 1 build opens the authored 21-mission Canal Ward sequence. Missions 1 and 2 clear hands-off. In the local build, Mission 3 follows a straight street with a small right correction to a house-front finish. Bend practice starts at Mission 4, followed by pickup and pursuit practice. The Mission 3 change is pending release. Story dialogue is placeholder copy, and production world and failure art and detailed Garage visuals remain open. The player starts with one owned Starter Coupe. Vehicle eligibility is covered by tests. Shop, Daily Missions, and Chapter 2 are unavailable. This build runs locally. Platform SDK integration, final balance, and driving feel are pending. [26 November PM handoff](HANDOFF-2026-11-26.md)
+The accepted Pixi Chapter 1 build opens the authored 21-mission Canal Ward sequence. Missions 1 and 2 clear hands-off. In the local build, Mission 3 follows a straight street with a small right correction to a house-front finish. Bend practice starts at Mission 4, followed by pickup and pursuit practice. The Mission 3 change is pending release. Story dialogue is placeholder copy, and production world and failure art and detailed Garage visuals remain open. The orange City Hatchback is the default for all 21 Chapter 1 missions and replays on the regular port-8080 LAN build. New saves start with it owned. Existing saves add the hatchback and retain owned cars, balances, mission progress, and valid pending payouts. A previously earned Coupe bonus still uses its saved car and condition. Vehicle eligibility is covered by tests. Shop, Daily Missions, and Chapter 2 are unavailable. This build runs locally. Platform SDK integration, final balance, and driving feel are pending. [26 November PM handoff](HANDOFF-2026-11-26.md)
 
 ## Run locally
 
-From the project root, run:
+Open [Chapter 1 on the shared dev server](http://192.168.1.138:8080/). Use this LAN origin for owner playtests and optional previews. Reload the browser to pick up edits from this checkout.
+
+Before starting or restarting the server, inspect port 8080 in PowerShell.
 
 ```powershell
-npm ci
-node scripts/serve.mjs
+Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue |
+  Select-Object LocalAddress, LocalPort, OwningProcess
 ```
 
-Open [Chapter 1](http://127.0.0.1:8080/) in a browser. Use the HTTP address so the browser can load the modules and authored JSON. The server listens only on `127.0.0.1`. If port 8080 is busy, run `node scripts/serve.mjs 8081` and open the printed address. Stop the server with **Ctrl+C**.
+Verify that the listener belongs to this checkout before reusing it. If another process owns port 8080, report the conflict. Restart the project listener in place only when server code or asset routing changes require it. Use **Ctrl+C** in its hosting console if you started it there, then reopen it on the same LAN address and port.
 
-`index.html` hosts one focusable canvas. The server serves PixiJS `8.23.0` at `/vendor/pixi.mjs` from the locked local install. The normal URL loads authored content from `src/content/world.json` and `src/content/chapter1.json`. `?fixture=1` selects the engineering fixture with its own save key. `?observe=1` opt-in exposes read-only test observations. The rebuild’s save is scoped to the browser origin and profile. The legacy `heatwave-getaway-prototype.html` uses its own save key.
+If the project listener is absent and port 8080 is free, run this from the checkout root. Install dependencies with `npm.cmd ci` if needed. Set `$lanIp` to the machine’s actual LAN address. The `scripts/serve.mjs` CLI binds to loopback, so the shared server uses its exported `gameServer()`.
+
+```powershell
+$lanIp = '192.168.1.138'
+node --input-type=module -e 'import { gameServer } from "./scripts/serve.mjs"; const host = process.argv[1]; gameServer().listen(8080, host, () => console.log("Chapter 1: http://" + host + ":8080/"));' $lanIp
+```
+
+`index.html` hosts one focusable canvas. The server serves PixiJS `8.23.0` at `/vendor/pixi.mjs` from the locked local install. The normal URL loads authored content from `src/content/world.json` and `src/content/chapter1.json`. Open optional previews on the same origin by route or query, with a separate save key when preview progress needs isolation. When the document lacks the `data-pages-build` marker, `?fixture=1` selects the engineering fixture and its separate save key, and `?observe=1` enables read-only test observations. The Pages build marker disables both. Browser saves are scoped to origin and profile. The legacy `heatwave-getaway-prototype.html` uses its own save key.
 
 ## GitHub Pages
 
-Push to `main` to publish. GitHub Actions builds and deploys the game automatically. Check the latest deploy in [GitHub Actions](https://github.com/mcorcosa/getaway-total-accident/actions/workflows/pages.yml), then open [Getaway Total Accident](https://mcorcosa.github.io/getaway-total-accident/). The hosted game and localhost keep separate browser saves.
+Push to `main` to publish. GitHub Actions builds and deploys the game automatically. Check the latest deploy in [GitHub Actions](https://github.com/mcorcosa/getaway-total-accident/actions/workflows/pages.yml), then open [Getaway Total Accident](https://mcorcosa.github.io/getaway-total-accident/). The hosted game and the LAN dev origin keep separate browser saves.
 
 **Optional local check.** From the project root, run the following to package the site and smoke-test it under the repository subpath. The test starts its own local server and clears and banks Mission 1.
 
@@ -44,7 +53,7 @@ node --test tests/runtime.test.mjs tests/authored-content.test.mjs
 node --test --test-reporter=spec tests/browser/acceptance.test.mjs
 ```
 
-The browser suite starts its own local server and launches an installed Edge, Chrome, or Chromium with an isolated temporary profile. It uses Node.js's built-in WebSocket client and prints its screenshot directory. Set `GTC_BROWSER` to the browser executable path if detection fails.
+The browser suite uses a short-lived loopback test server that it closes after the run. It launches an installed Edge, Chrome, or Chromium with an isolated temporary profile, uses Node.js's built-in WebSocket client, and prints its screenshot directory. Set `GTC_BROWSER` to the browser executable path if detection fails.
 
 **Revised Pixi checkpoint, 26 November 2026.** Engineering independently validated all 21 missions and passed all 15 unchanged Node tests and all 14 installed Edge tests. The Windows run used Node `24.11.1`, npm `11.6.2`, Edge `158.0.4370.33`, and PixiJS `8.23.0` in WebGL. The suite checks single-canvas compliance, real pointer, multitouch and keyboard input, Story wrap, compact collisions, resize and focus, fixture isolation, and bank, bonus, reload, and replay flows. Art passed the desktop joins, compact and desktop postcard framing, and compact collision-HUD revisions. The PM accepted the frozen build. [Checkpoint evidence and scope](HANDOFF-2026-11-26.md#current-implementation-and-evidence)
 

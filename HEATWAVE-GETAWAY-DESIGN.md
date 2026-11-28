@@ -4,9 +4,9 @@
 
 The owner confirmed the current game name on 26 November 2026 in PM chat `01a2175b-11c4-7230-9b26-0216587bad64`, message `01a217bf-40d2-7ca1-950b-6f166c34226d`.
 
-The accepted Pixi Chapter 1 build carries forward the 21 authored Canal Ward missions. Missions 1 and 2 clear hands-off. In the local build, Mission 3 follows a straight street with a small right correction to a house-front finish. Bend practice starts at Mission 4, followed by pickup and pursuit practice. Level Design and Engineering verified the Mission 3 change locally on 27 November 2026. Release is pending. Run `npm ci`, then start `node scripts/serve.mjs` and open `http://127.0.0.1:8080/`. [Chapter 1 build guide](docs/chapter-1-build.md) · [26 November PM handoff](docs/HANDOFF-2026-11-26.md)
+The accepted Pixi Chapter 1 build carries forward the 21 authored Canal Ward missions. Missions 1 and 2 clear hands-off. In the local build, Mission 3 follows a straight street with a small right correction to a house-front finish. Bend practice starts at Mission 4, followed by pickup and pursuit practice. Level Design and Engineering verified the Mission 3 change locally on 27 November 2026. Release is pending. Use the single shared LAN server on port 8080. [Chapter 1 LAN runbook](docs/chapter-1-build.md#run-locally) · [26 November PM handoff](docs/HANDOFF-2026-11-26.md)
 
-Story dialogue is placeholder copy, and production art remains open. The Garage starts with one owned Starter Coupe. Shop, Daily Missions, and Chapter 2 are unavailable. Platform SDK work, final balance, and driving feel remain open.
+Story dialogue is placeholder copy, and production art remains open. The orange City Hatchback is the default for all 21 Chapter 1 missions and replays on the regular port-8080 LAN build. New saves start with it owned. Existing saves add the hatchback and retain owned cars, balances, mission progress, and valid pending payouts. A previously earned Coupe bonus still uses its saved car and condition. Level Design and Engineering verified all 21 main missions and 21 bonuses in simulation, and Engineering checked fresh saves and a carried-over Coupe bonus in Edge. Shop, Daily Missions, and Chapter 2 are unavailable. Platform SDK work, final balance, and driving feel remain open.
 
 The [legacy four-job prototype](heatwave-getaway-prototype.html) remains available, with full-paying replays, one optional bonus per run, and a purchasable Neon Strip free-drive preview. It uses its original save. The rebuild stores progress separately.
 
@@ -168,7 +168,7 @@ Replays pay the normal base amount and can award the same additional cash as a f
 
 ### Mission vehicle selection
 
-A steal-a-vehicle mission locks the specified stolen vehicle. Other missions start with a mission default and, when selection is available, let the player choose an owned alternative from the same vehicle category as the default. The district's tier requirement still applies. Category describes the kind of vehicle. Tier determines district eligibility. How the default relates to ownership or loaners is open.
+A steal-a-vehicle mission locks the specified stolen vehicle. Other missions start with a mission default and, when selection is available, let the player choose an owned alternative from the same vehicle category as the default. The district's tier requirement still applies. Category describes the kind of vehicle. Tier determines district eligibility. How future chapter defaults relate to ownership or loaners is open.
 
 ### Success and bonus
 
